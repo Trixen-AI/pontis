@@ -1,0 +1,137 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Clip sideways overflow at the root. `clip` (not `hidden`) so position: sticky keeps working,
+   and on the root so mobile browsers never widen the layout viewport to fit wide content. */
+html,
+body {
+  overflow-x: clip;
+}
+@supports not (overflow: clip) {
+  body {
+    overflow-x: hidden;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--white-92);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+.big-mark {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---- dashboard utilities ---- */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+.skeleton {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.live-dot {
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(210, 255, 77, 0.55); }
+  50% { box-shadow: 0 0 0 5px rgba(210, 255, 77, 0); }
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* ---- Pontis mark: "diverge and lock" ----
+   The long candle lifts while its wick reaches up, the short candle sinks while its wick
+   reaches down, then both snap back into the P with a small overshoot. */
+.pmark--live .pmark-long,
+.pmark--live .pmark-short,
+.pmark--live .pmark-long-wick,
+.pmark--live .pmark-short-wick {
+  animation-duration: 5.2s;
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+}
+.pmark--live .pmark-long { animation-name: pmark-long; }
+.pmark--live .pmark-short { animation-name: pmark-short; }
+.pmark--live .pmark-long-wick,
+.pmark--live .pmark-short-wick {
+  transform-box: fill-box;
+}
+.pmark--live .pmark-long-wick { animation-name: pmark-long-wick; transform-origin: 50% 100%; }
+.pmark--live .pmark-short-wick { animation-name: pmark-short-wick; transform-origin: 50% 0%; }
+
+@keyframes pmark-long {
+  0%, 8% { transform: translateY(0); }
+  28% { transform: translateY(-7px); }
+  52% { transform: translateY(-7px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  70%, 100% { transform: translateY(0); }
+}
+@keyframes pmark-long-wick {
+  0%, 8% { transform: scaleY(1); }
+  28% { transform: scaleY(1.45); }
+  52% { transform: scaleY(1.45); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  70%, 100% { transform: scaleY(1); }
+}
+@keyframes pmark-short {
+  0%, 16% { transform: translateY(0); }
+  36% { transform: translateY(7px); }
+  58% { transform: translateY(7px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  76%, 100% { transform: translateY(0); }
+}
+@keyframes pmark-short-wick {
+  0%, 16% { transform: scaleY(1); }
+  36% { transform: scaleY(1.5); }
+  58% { transform: scaleY(1.5); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  76%, 100% { transform: scaleY(1); }
+}

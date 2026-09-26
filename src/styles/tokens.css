@@ -1,0 +1,37 @@
+/* Pontis design tokens. Roles mirror the source layout's palette slots one to one. */
+:root {
+  /* dark surfaces */
+  --ink: #0e1510;          /* page ink, loader, footer */
+  --ink-2: #0f1812;        /* stack + stats band */
+  --line: #2b3b2d;         /* hairlines, stat dividers, box border */
+
+  /* accent */
+  --accent: #d2ff4d;       /* primary buttons, labels, active callouts */
+  --accent-ink: #1b2413;   /* text on accent */
+  --rug: #ff6a55;          /* the short side: rug candles, short highlights */
+
+  /* light surfaces */
+  --paper: #f8faf0;        /* pledge section */
+  --paper-2: #f2f7e3;      /* statement section */
+  --paper-3: #e6f2c8;      /* wordmark section */
+  --contour: #9fb487;      /* contour lines on paper */
+
+  /* chart marks on the ink surface: validated with the dataviz checks (dark band, deutan dE 13.7) */
+  --chart-up: #80a21b;
+  --chart-down: #b53627;
+  --chart-grid: rgba(255, 255, 255, 0.045);
+
+  /* text */
+  --white: #ffffff;
+  --white-92: rgba(255, 255, 255, 0.92);
+  --white-80: rgba(255, 255, 255, 0.8);
+  --muted: #b9c2b3;        /* dimmed statement words, idle callouts */
+
+  /* type */
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, Ubuntu, 'Helvetica Neue', sans-serif;
+  --font-serif: 'Newsreader', Georgia, Garamond, serif;
+
+  /* layout */
+  --container: 1200px;
+  --nav-h: 56px;
+}
