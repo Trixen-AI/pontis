@@ -16,6 +16,13 @@ export const hero = {
   secondary: { label: 'Go Short', href: '/app/markets?tab=rugs' },
 }
 
+/** The FunPerps token (Pump.fun launch on Solana). */
+export const token = {
+  symbol: 'FUNP',
+  address: 'CKabfUPRm2kkn8WPaEwEvPTpTaxatXoWHceCU5mLpump',
+  explorer: 'https://solscan.io/token/CKabfUPRm2kkn8WPaEwEvPTpTaxatXoWHceCU5mLpump',
+}
+
 export const stack = {
   titleBefore: 'Inside',
   titleAfter: '',
