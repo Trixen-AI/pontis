@@ -28,3 +28,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# source APK folder (the site serves public/downloads/Pontis.apk)
+mobile apk/

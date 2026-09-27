@@ -1,6 +1,7 @@
 import { Box, Flex, Heading, Text } from '@chakra-ui/react'
 import { Mark } from '@/components/ui/Brand'
 import { PillButton } from '@/components/ui/PillButton'
+import { ApkLink, CaChip } from '@/components/ui/TokenLinks'
 import { hero } from '@/data/content'
 import { HeroField } from './HeroField'
 
@@ -36,6 +37,10 @@ export function Hero() {
             <PillButton href={hero.secondary.href} variant="outline">
               {hero.secondary.label}
             </PillButton>
+          </Flex>
+          <Flex pt="24px" gap="12px" wrap="wrap" justify="center" maxW="100%">
+            <CaChip />
+            <ApkLink />
           </Flex>
         </Flex>
       </Flex>

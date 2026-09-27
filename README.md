@@ -39,6 +39,14 @@ headers for hashed assets, basic security headers, and a `www.pontisapp.xyz` to 
 4. In the Reown dashboard, add `pontisapp.xyz` (and your `*.vercel.app` preview domain if you test there) to the
    project's allowed domains, or the wallet modal will refuse to connect in production.
 
+## Token and Android app
+
+- The PONT contract address and the APK details live in `src/data/content.ts` (`token`, `androidApp`). The hero
+  and footer show the CA (links to Blockscout, one-tap copy) and an Android download button.
+- The APK is served from `public/downloads/Pontis.apk`. To ship a new build, replace that file (keep the name) and
+  update `androidApp.size`. `vercel.json` serves it as `application/vnd.android.package-archive` with
+  `Content-Disposition: attachment; filename="Pontis.apk"`.
+
 ## SEO
 
 `index.html` carries the title, description, canonical, Open Graph and X card tags, icons, the web manifest and

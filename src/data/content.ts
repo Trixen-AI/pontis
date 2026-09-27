@@ -94,3 +94,17 @@ export const footer = {
 export const socials = [
   { key: 'x', label: 'Pontis on X', href: 'https://x.com/Pontis_xyz' },
 ] as const
+
+/** The PONT token (verified on Robinhood Chain: name "Pontis", symbol PONT, 18 decimals, 1B supply). */
+export const token = {
+  symbol: 'PONT',
+  address: '0xB6bae42DDa947F56bd942321F5Fc4edFf341A4db',
+  explorer: 'https://robinhoodchain.blockscout.com/token/0xB6bae42DDa947F56bd942321F5Fc4edFf341A4db',
+} as const
+
+/** Android app. The file is served from public/downloads; replace it there to ship a new build. */
+export const androidApp = {
+  href: '/downloads/Pontis.apk',
+  fileName: 'Pontis.apk',
+  size: '9.5 MB',
+} as const
