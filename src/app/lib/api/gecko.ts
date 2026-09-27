@@ -1,10 +1,8 @@
-// GeckoTerminal public API (Robinhood Chain = network "robinhood").
+// GeckoTerminal public API on Solana (network "solana"). Addresses are case-sensitive base58.
 // Free tier allows ~30 calls/min per IP, so every call goes through one spaced queue.
-import type { Address } from 'viem'
-import { getAddress } from 'viem'
-import { PONS_DEXES } from '@/app/config'
+import { PUMP_DEXES } from '@/app/config'
 
-const BASE = 'https://api.geckoterminal.com/api/v2/networks/robinhood'
+const BASE = 'https://api.geckoterminal.com/api/v2/networks/solana'
 const GAP_MS = 2100
 let chain: Promise<unknown> = Promise.resolve()
 let last = 0
@@ -58,9 +56,9 @@ type PoolItem = { id: string; attributes: PoolAttrs; relationships: { base_token
 type TokenItem = { id: string; attributes: { address: string; name: string; symbol: string; decimals: number; image_url: string | null } }
 type PoolList = { data: PoolItem[]; included?: TokenItem[] }
 
-export type Stage = 'curve' | 'graduated' | 'legacy' | 'dex'
+export type Stage = 'curve' | 'graduated' | 'dex'
 export type Market = {
-  token: Address
+  token: string
   symbol: string
   name: string
   image?: string
@@ -76,15 +74,17 @@ export type Market = {
   createdAt?: number
   buys24h: number
   sells24h: number
+  /** Share of the Pump.fun curve sold, 0..1 (set after on-chain verification). */
+  progress?: number
 }
 
 const n = (v: string | null | undefined) => (v == null ? NaN : Number(v))
 const stageOf = (dex: string): Stage =>
-  dex === PONS_DEXES.curve ? 'curve' : dex === PONS_DEXES.graduated ? 'graduated' : dex === PONS_DEXES.legacy ? 'legacy' : 'dex'
-const idToAddress = (id: string) => getAddress(id.split('_')[1])
+  dex === PUMP_DEXES.curve ? 'curve' : dex === PUMP_DEXES.graduated ? 'graduated' : 'dex'
+const idToAddress = (id: string) => id.slice(id.indexOf('_') + 1)
 
 function toMarkets(list: PoolList): Market[] {
-  const tokens = new Map((list.included ?? []).filter((t) => t.id.startsWith('robinhood_')).map((t) => [t.id, t.attributes]))
+  const tokens = new Map((list.included ?? []).filter((t) => t.id.startsWith('solana_')).map((t) => [t.id, t.attributes]))
   return list.data.map((p) => {
     const a = p.attributes
     const dex = p.relationships.dex.data.id
@@ -106,7 +106,8 @@ function toMarkets(list: PoolList): Market[] {
         h24: n(a.price_change_percentage.h24),
       },
       volume24h: n(a.volume_usd.h24),
-      liquidityUsd: n(a.reserve_in_usd),
+      // GeckoTerminal reports PumpSwap reserves as near-zero noise; those are filled from DexScreener instead.
+      liquidityUsd: dex === PUMP_DEXES.graduated ? NaN : n(a.reserve_in_usd),
       fdvUsd: n(a.fdv_usd),
       createdAt: a.pool_created_at ? Date.parse(a.pool_created_at) : undefined,
       buys24h: a.transactions.h24?.buys ?? 0,
@@ -115,17 +116,29 @@ function toMarkets(list: PoolList): Market[] {
   })
 }
 
-/** Top pools of one Pons dex, ordered by 24h volume (or newest first). */
-export async function getDexMarkets(dex: string, sort: 'volume' | 'new' = 'volume', signal?: AbortSignal) {
-  const s = sort === 'volume' ? 'h24_volume_usd_desc' : 'pool_created_at_desc'
-  return toMarkets(await get<PoolList>(`/dexes/${dex}/pools?page=1&sort=${s}&include=base_token`, signal))
+/** Top pools of one Pump.fun dex by 24h volume. */
+export async function getDexMarkets(dex: string, signal?: AbortSignal) {
+  return toMarkets(await get<PoolList>(`/dexes/${dex}/pools?page=1&sort=h24_volume_usd_desc&include=base_token`, signal))
 }
 
-/** Every pool that trades a token, deepest first. */
+/**
+ * Newest Solana pools on the Pump.fun curve and on PumpSwap, newest first. Per-dex lists cannot be sorted
+ * by age, so this reads the network-wide new-pools feed and keeps the two Pump.fun dexes.
+ */
+export async function getNewPumpMarkets(pages = 1, signal?: AbortSignal) {
+  const out: Market[] = []
+  for (let page = 1; page <= pages; page++) {
+    const list = await get<PoolList>(`/new_pools?page=${page}&include=base_token`, signal)
+    out.push(...toMarkets(list).filter((m) => m.stage !== 'dex'))
+  }
+  return out
+}
+
+/** Every pool that trades a token, most traded first (the live pool after a graduation). */
 export async function getTokenMarkets(token: string, signal?: AbortSignal) {
   const markets = toMarkets(await get<PoolList>(`/tokens/${token}/pools?page=1&include=base_token`, signal))
-  // keep pools where this token is the base, deepest liquidity first
-  return markets.filter((m) => m.token.toLowerCase() === token.toLowerCase()).sort((a, b) => (b.liquidityUsd || 0) - (a.liquidityUsd || 0))
+  // keep pools where this token is the base, most traded first
+  return markets.filter((m) => m.token === token).sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
 }
 
 export type TokenPrice = { symbol: string; name: string; priceUsd: number; volume24h: number; liquidityUsd: number; image?: string }
@@ -142,18 +155,18 @@ type MultiToken = {
 }
 
 /**
- * Prices for up to 30 tokens in one call. Covers Pons bonding-curve tokens, which DexScreener does not index.
- * Keys are lowercase addresses; unpriced tokens are absent.
+ * Prices for up to 30 tokens in one call. Covers Pump.fun bonding-curve tokens, which DexScreener often does not index yet.
+ * Keys are the exact mint addresses; unpriced tokens are absent.
  */
 export async function getTokenPrices(tokens: readonly string[], signal?: AbortSignal): Promise<Map<string, TokenPrice>> {
   const out = new Map<string, TokenPrice>()
-  const list = [...new Set(tokens.map((t) => t.toLowerCase()))].slice(0, 30)
+  const list = [...new Set(tokens)].slice(0, 30)
   if (!list.length) return out
   const res = await get<{ data: MultiToken[] }>(`/tokens/multi/${list.join(',')}`, signal)
   for (const { attributes: a } of res.data) {
     const price = n(a.price_usd)
     if (!Number.isFinite(price)) continue
-    out.set(a.address.toLowerCase(), {
+    out.set(a.address, {
       symbol: a.symbol,
       name: a.name,
       priceUsd: price,

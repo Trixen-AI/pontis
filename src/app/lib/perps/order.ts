@@ -1,56 +1,66 @@
-// Signed perp orders (EIP-712), the same pattern off-chain order books use: the trader approves
-// an exact order in their wallet, no funds move. Until the engine contract exists, approved orders
-// are kept in this browser, per wallet, and listed in Positions.
+// Signed perp orders on Solana. The trader approves an exact, human-readable order in their wallet
+// (signMessage), the same pattern off-chain order books use. No funds move when approving.
+// Approved orders are kept in this browser, per wallet, and listed in Positions.
+import bs58 from 'bs58'
 import { useSyncExternalStore } from 'react'
-import type { Address, Hex } from 'viem'
-import { PERPS_ENGINE, robinhood } from '@/app/config'
-
-export const orderDomain = {
-  name: 'Pontis',
-  version: '1',
-  chainId: robinhood.id,
-  ...(PERPS_ENGINE ? { verifyingContract: PERPS_ENGINE } : {}),
-} as const
-
-export const orderTypes = {
-  Order: [
-    { name: 'trader', type: 'address' },
-    { name: 'market', type: 'address' },
-    { name: 'isLong', type: 'bool' },
-    { name: 'collateral', type: 'uint256' }, // wei
-    { name: 'size', type: 'uint256' }, // wei of notional
-    { name: 'acceptablePrice', type: 'uint256' }, // USD, 18 decimals
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' }, // unix seconds
-  ],
-} as const
+import { SOLANA_MAINNET } from '@/app/config'
 
 /** What the dashboard keeps about an approved order (numbers for display, signature for the engine). */
 export type SignedOrder = {
   id: string
-  trader: Address
-  market: Address
+  trader: string
+  market: string
   symbol: string
   isLong: boolean
   leverage: number
-  collateralEth: number
-  sizeEth: number
+  collateralSol: number
+  sizeSol: number
   sizeUsd: number
   tokenAmount: number
   entryPrice: number
   liquidationPrice: number
   acceptablePrice: number
-  feeEth: number
+  feeSol: number
   nonce: string
-  deadline: number
-  signature: Hex
+  deadline: number // unix seconds
+  message: string
+  signature: string // base58
   signedAt: number
 }
 
+export type OrderDraft = Omit<SignedOrder, 'id' | 'message' | 'signature' | 'signedAt'>
+
+/** The exact text the wallet shows and signs. Keep it stable: the engine will verify this format. */
+export function orderMessage(o: OrderDraft): string {
+  return [
+    'FunPerps order',
+    '',
+    `Market: ${o.symbol}-PERP (${o.market})`,
+    `Side: ${o.isLong ? 'LONG' : 'SHORT'}`,
+    `Collateral: ${o.collateralSol} SOL`,
+    `Leverage: ${o.leverage}x`,
+    `Size: ${o.sizeSol.toFixed(9)} SOL`,
+    `Price protection: ${o.acceptablePrice.toPrecision(8)} USD`,
+    `Trader: ${o.trader}`,
+    `Nonce: ${o.nonce}`,
+    `Expires: ${new Date(o.deadline * 1000).toISOString()}`,
+    `Chain: ${SOLANA_MAINNET}`,
+    '',
+    'Signing approves this order. It does not move funds.',
+  ].join('\n')
+}
+
+export async function signOrder(draft: OrderDraft, sign: (m: Uint8Array) => Promise<Uint8Array>): Promise<SignedOrder> {
+  const message = orderMessage(draft)
+  const sig = await sign(new TextEncoder().encode(message))
+  const signature = bs58.encode(sig)
+  return { ...draft, id: signature.slice(0, 16), message, signature, signedAt: Date.now() }
+}
+
 // ---- tiny per-wallet store over localStorage, shared by every component ----
-const VERSION = 'v1'
-const keyFor = (trader: string) => `pontis:orders:${VERSION}:${trader.toLowerCase()}`
-const EVENT = 'pontis-orders'
+const VERSION = 'v2'
+const keyFor = (trader: string) => `funperps:orders:${VERSION}:${trader}`
+const EVENT = 'funperps-orders'
 const EMPTY: SignedOrder[] = []
 const cache = new Map<string, SignedOrder[]>()
 
@@ -82,7 +92,7 @@ function write(trader: string, list: SignedOrder[]) {
 
 function subscribe(onChange: () => void) {
   const sync = (e: Event) => {
-    if (e instanceof StorageEvent && e.key?.startsWith('pontis:orders:')) cache.delete(e.key)
+    if (e instanceof StorageEvent && e.key?.startsWith('funperps:orders:')) cache.delete(e.key)
     onChange()
   }
   window.addEventListener(EVENT, sync)
@@ -94,7 +104,7 @@ function subscribe(onChange: () => void) {
 }
 
 /** Approved orders for one wallet, newest first. Re-renders when any tab adds or cancels one. */
-export function useSignedOrders(trader: Address | undefined): SignedOrder[] {
+export function useSignedOrders(trader: string | undefined): SignedOrder[] {
   return useSyncExternalStore(subscribe, () => (trader ? read(trader) : EMPTY))
 }
 
@@ -102,8 +112,8 @@ export function saveOrder(o: SignedOrder) {
   write(o.trader, [o, ...read(o.trader).filter((x) => x.id !== o.id)])
 }
 
-export function cancelOrder(trader: Address, id: string) {
+export function cancelOrder(trader: string, id: string) {
   write(trader, read(trader).filter((x) => x.id !== id))
 }
 
-export const newNonce = () => BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000))
+export const newNonce = () => `${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`

@@ -83,17 +83,17 @@ button {
   animation: live-pulse 1.8s ease-in-out infinite;
 }
 @keyframes live-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(210, 255, 77, 0.55); }
-  50% { box-shadow: 0 0 0 5px rgba(210, 255, 77, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(113, 207, 163, 0.55); }
+  50% { box-shadow: 0 0 0 5px rgba(113, 207, 163, 0); }
 }
 @keyframes skeleton-shimmer {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
 }
 
-/* ---- Pontis mark: "diverge and lock" ----
+/* ---- FunPerps mark: "diverge and lock" ----
    The long candle lifts while its wick reaches up, the short candle sinks while its wick
-   reaches down, then both snap back into the P with a small overshoot. */
+   reaches down, then both snap back above the smile with a small overshoot. */
 .pmark--live .pmark-long,
 .pmark--live .pmark-short,
 .pmark--live .pmark-long-wick,

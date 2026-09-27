@@ -1,9 +1,8 @@
 import { Box, Flex, Text, chakra } from '@chakra-ui/react'
 import { useDeferredValue, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { isAddress } from 'viem'
 import { useSeo } from '@/lib/seo'
-import { maxLeverageFor } from '@/app/config'
+import { isSolanaAddress, maxLeverageFor } from '@/app/config'
 import { useMarkets, useNewCurveMarkets } from '@/app/hooks/useMarketData'
 import type { Market } from '@/app/lib/api/gecko'
 import { formatNumber, formatPrice, formatUsd, timeAgo } from '@/app/lib/format'
@@ -34,7 +33,7 @@ function rowsFor(tab: Tab, markets: Market[], fresh: Market[] | undefined): Mark
 export default function Markets() {
   useSeo({
     title: 'Markets',
-    description: 'Every PONS token with a live price is a perp market on Pontis. Browse runners, rugs and new curve launches on Robinhood Chain.',
+    description: 'Every Pump.fun token with a live price is a perp market on FunPerps. Browse runners, rugs and new curve launches on Solana.',
     path: '/app/markets',
   })
   const [params, setParams] = useSearchParams()
@@ -48,7 +47,7 @@ export default function Markets() {
 
   const all = rowsFor(tab, markets, fresh.data)
   const needle = q.toLowerCase()
-  const rows = needle && !isAddress(q) ? all.filter((m) => m.symbol.toLowerCase().includes(needle) || m.name.toLowerCase().includes(needle)) : all
+  const rows = needle && !isSolanaAddress(q) ? all.filter((m) => m.symbol.toLowerCase().includes(needle) || m.name.toLowerCase().includes(needle)) : all
 
   // Headline numbers across every market currently loaded
   let volume = 0
@@ -66,7 +65,7 @@ export default function Markets() {
     <>
       <PageHeader
         title="Markets"
-        sub="Every PONS token with a live price is a perp market. Long the runners, short the rugs."
+        sub="Every Pump.fun token with a live price is a perp market. Long the runners, short the rugs."
         right={
           <Text m="0" fontSize="12px" color="var(--muted)" className="tabular">
             {loaded < total ? `Loading sources ${loaded}/${total}…` : `Updated ${timeAgo(updatedAt)}`}
@@ -77,10 +76,10 @@ export default function Markets() {
 
       <Panel p={{ base: '20px', md: '28px 32px' }} mb="24px">
         <Flex gap={{ base: '20px', md: '48px' }} wrap="wrap">
-          <Stat label="Markets tracked" value={isLoading ? '…' : formatNumber(markets.length)} sub="Pons curve, graduated and V1 pools" />
+          <Stat label="Markets tracked" value={isLoading ? '…' : formatNumber(markets.length)} sub="Pump.fun curves and PumpSwap pools, checked on-chain" />
           <Stat label="24h volume" value={isLoading ? '…' : formatUsd(volume)} sub="Across tracked markets" />
-          <Stat label="Runners" value={isLoading ? '…' : formatNumber(runners)} valueColor="var(--accent)" sub="Up over 24h" />
-          <Stat label="Rugs" value={isLoading ? '…' : formatNumber(rugs)} valueColor="var(--rug)" sub="Down over 24h" />
+          <Stat label="Runners" value={isLoading ? '…' : formatNumber(runners)} valueColor="var(--long)" sub="Up over 24h" />
+          <Stat label="Rugs" value={isLoading ? '…' : formatNumber(rugs)} valueColor="var(--short)" sub="Down over 24h" />
         </Flex>
       </Panel>
 
@@ -103,11 +102,11 @@ export default function Markets() {
         </Flex>
       </Flex>
 
-      {isAddress(q) && (
+      {isSolanaAddress(q) && (
         <Panel p="16px 20px" mb="14px">
           <Flex align="center" justify="space-between" gap="12px" wrap="wrap">
             <Text m="0" fontSize="14px" color="var(--white-80)">
-              Open the market for <chakra.span color="var(--white)" className="tabular">{q}</chakra.span>. Pontis checks the Pons factory on-chain first.
+              Open the market for <chakra.span color="var(--white)" className="tabular">{q}</chakra.span>. FunPerps checks its Pump.fun bonding curve on-chain first.
             </Text>
             <PillOutline onClick={() => navigate(`/app/markets/${q}`)}>Open market</PillOutline>
           </Flex>
@@ -208,8 +207,8 @@ function MarketTable({ rows, loading, tab }: { rows: Market[]; loading: boolean;
                 </TD>
                 <TD display={{ base: 'none', sm: 'table-cell' }} onClick={(e) => e.stopPropagation()}>
                   <Flex gap="6px" justify="flex-end">
-                    <PillOutline to={`${href}?side=long`}>Long</PillOutline>
-                    <PillOutline to={`${href}?side=short`} tone="rug">
+                    <PillOutline to={`${href}?side=long`} tone="long">Long</PillOutline>
+                    <PillOutline to={`${href}?side=short`} tone="short">
                       Short
                     </PillOutline>
                   </Flex>

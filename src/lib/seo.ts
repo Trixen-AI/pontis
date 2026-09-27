@@ -2,9 +2,9 @@
 // this keeps title, description, canonical and share tags in step with the current route.
 import { useEffect } from 'react'
 
-export const SITE_URL = 'https://pontisapp.xyz'
+export const SITE_URL = 'https://funperps.xyz'
 const DEFAULT_DESCRIPTION =
-  'Pontis lists a perpetual market for every token launched on PONS. Long the runners, short the rugs, with live prices and ETH margin on Robinhood Chain.'
+  'FunPerps opens a perpetual market for every token launched on Pump.fun. Long the runners, short the rugs, with live prices and SOL margin on Solana.'
 
 type Seo = {
   /** Page title without the brand suffix; omit for the home page. */
@@ -22,7 +22,7 @@ function setMeta(selector: string, attr: 'content' | 'href', value: string) {
 
 export function useSeo({ title, description = DEFAULT_DESCRIPTION, path, noindex = false }: Seo) {
   useEffect(() => {
-    const full = title ? `${title} | Pontis` : 'Pontis | Perps for every PONS token on Robinhood Chain'
+    const full = title ? `${title} | FunPerps` : 'FunPerps | Perps for every Pump.fun token on Solana'
     const url = `${SITE_URL}${path}`
     document.title = full
     setMeta('meta[name="description"]', 'content', description)

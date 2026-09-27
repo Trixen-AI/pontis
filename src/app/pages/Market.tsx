@@ -1,110 +1,102 @@
 import { Box, Flex, Grid, Text, chakra } from '@chakra-ui/react'
 import { useQuery } from '@tanstack/react-query'
-import { useSeo } from '@/lib/seo'
 import { useParams, useSearchParams } from 'react-router'
-import { type Address, erc20Abi, formatUnits, getAddress, isAddress } from 'viem'
-import { useReadContract } from 'wagmi'
-import { explorerAddress, explorerToken, explorerTx, robinhood } from '@/app/config'
-import { useEthUsd, useMarket, useTrades } from '@/app/hooks/useMarketData'
-import { engineConfigured, useMarketParams, usePositions, type MarketRisk } from '@/app/hooks/usePerps'
-import { useSignedOrders } from '@/app/lib/perps/order'
-import { useWalletState } from '@/app/hooks/useWallet'
-import { formatNumber, formatPrice, formatUsd, shortAddress, timeAgo } from '@/app/lib/format'
-import { fromWad, positionPnlEth } from '@/app/lib/perps/math'
-import { getTokenMeta } from '@/app/lib/pons'
-import type { Side } from '@/app/lib/perps/math'
+import { explorerAddress, explorerToken, explorerTx, isSolanaAddress } from '@/app/config'
 import { PriceChart } from '@/app/components/PriceChart'
 import { Trade } from '@/app/components/Trade'
 import { Change, EmptyState, Panel, PanelHeader, PillOutline, PillSolid, Skeleton, Stat, StageChip, TokenAvatar } from '@/app/components/ui'
+import { useMarket, useTrades } from '@/app/hooks/useMarketData'
+import { useMarketParams, type MarketRisk } from '@/app/hooks/usePerps'
+import { useSolUsd, useWalletState } from '@/app/hooks/useWallet'
+import { formatNumber, formatPrice, formatUsd, shortAddress, timeAgo } from '@/app/lib/format'
+import { positionPnl } from '@/app/lib/perps/math'
+import type { Side } from '@/app/lib/perps/math'
+import { useSignedOrders } from '@/app/lib/perps/order'
+import { getTokenBalance } from '@/app/lib/solana'
+import { useSeo } from '@/lib/seo'
 
 export default function MarketPage() {
-  const { token: raw } = useParams()
-  if (!raw || !isAddress(raw))
+  const { token } = useParams()
+  if (!token || !isSolanaAddress(token))
     return (
       <EmptyState title="That is not a token address" action={<PillSolid to="/app/markets">Back to markets</PillSolid>}>
-        Market pages live at /app/markets/ followed by a Robinhood Chain token address.
+        Market pages live at /app/markets/ followed by a Solana token mint address.
       </EmptyState>
     )
-  return <MarketView key={raw.toLowerCase()} token={getAddress(raw)} />
+  return <MarketView key={token} token={token} />
 }
 
-function MarketView({ token }: { token: Address }) {
+function MarketView({ token }: { token: string }) {
   const [params] = useSearchParams()
   const side: Side = params.get('side') === 'short' ? 'short' : 'long'
   const hedge = Number(params.get('hedge'))
-  const { verify, pools, quote, stats, primary, priceUsd } = useMarket(token)
-  const meta = useQuery({ queryKey: ['meta', token], queryFn: async () => (await getTokenMeta([token])).get(token.toLowerCase()), staleTime: Infinity })
-  const { data: ethUsd } = useEthUsd()
-  const seoSymbol = primary?.symbol ?? meta.data?.symbol ?? quote.data?.symbol
+  const { verify, pools, quote, primary, priceUsd } = useMarket(token)
+  const { data: solUsd } = useSolUsd()
+  const seoSymbol = primary?.symbol ?? quote.data?.symbol
   useSeo({
     title: seoSymbol ? `${seoSymbol}-PERP` : 'Market',
-    description: seoSymbol
-      ? `Long or short ${seoSymbol} on Pontis: live price, chart and order ticket for the ${seoSymbol} perp on Robinhood Chain.`
-      : undefined,
+    description: seoSymbol ? `Long or short ${seoSymbol} on FunPerps: live price, chart and order ticket for the ${seoSymbol} perp on Solana.` : undefined,
     path: `/app/markets/${token}`,
   })
 
   if (verify.isPending)
     return (
       <Box display="grid" gap="16px">
-        <Skeleton h="56px" w="360px" />
+        <Skeleton h="56px" w="320px" />
         <Skeleton h="420px" />
       </Box>
     )
-  if (verify.isError)
-    return <EmptyState title="Could not reach Robinhood Chain">The RPC did not answer. The page will retry when you come back to it.</EmptyState>
-  if (!verify.data?.isPons)
+  if (verify.isError) return <EmptyState title="Could not reach Solana">The RPC did not answer. The page will retry shortly.</EmptyState>
+  if (!verify.data)
     return (
       <EmptyState
-        title="Not a PONS token"
+        title="Not a Pump.fun token"
         action={
           <Flex gap="10px" justify="center" wrap="wrap">
-            <PillSolid to="/app/markets">Browse PONS markets</PillSolid>
-            <PillOutline onClick={() => window.open(explorerToken(token), '_blank', 'noopener')}>View on explorer</PillOutline>
+            <PillSolid to="/app/markets">Browse Pump.fun markets</PillSolid>
+            <PillOutline onClick={() => window.open(explorerToken(token), '_blank', 'noopener')}>View on Solscan</PillOutline>
           </Flex>
         }
       >
-        {shortAddress(token)} was not launched through the Pons factories on Robinhood Chain, so Pontis does not list a perp for it.
+        {shortAddress(token)} has no Pump.fun bonding curve on Solana, so FunPerps does not list a perp for it.
       </EmptyState>
     )
 
-  const info = verify.data
-  const symbol = primary?.symbol ?? meta.data?.symbol ?? quote.data?.symbol ?? '…'
-  const name = primary?.name ?? meta.data?.name ?? quote.data?.name ?? ''
+  const curve = verify.data
+  const onCurve = !curve.complete
+  const symbol = primary?.symbol ?? quote.data?.symbol ?? shortAddress(token)
+  const name = primary?.name ?? quote.data?.name ?? 'Pump.fun token'
   const image = primary?.image ?? quote.data?.image
-  const liquidity = primary?.liquidityUsd ?? quote.data?.liquidityUsd
+  const liquidity = quote.data?.liquidityUsd || primary?.liquidityUsd
   const change24 = primary?.change.h24 ?? quote.data?.change24h
-  const risk = { liquidityUsd: liquidity, volume24h: primary?.volume24h ?? quote.data?.volume24h, onCurve: info.phase === 'curve' }
-  const stage = info.phase === 'curve' ? 'curve' : info.phase === 'graduating' ? 'graduating' : info.version === 'v1' ? 'legacy' : 'graduated'
+  const volume24 = primary?.volume24h ?? quote.data?.volume24h
+  // on the curve, fall back to the curve's own price when no pool has traded yet
+  const price = priceUsd ?? (onCurve && solUsd ? curve.priceSol * solUsd : undefined)
+  const risk: MarketRisk = { liquidityUsd: liquidity, volume24h: volume24, onCurve }
 
   return (
     <>
-      {/* header */}
       <Flex justify="space-between" align={{ base: 'flex-start', md: 'flex-end' }} direction={{ base: 'column', md: 'row' }} gap="16px" mb="20px">
-        <Flex align="center" gap="14px">
+        <Flex align="center" gap="14px" minW="0">
           <TokenAvatar src={image} symbol={symbol} size={48} />
-          <Box>
+          <Box minW="0">
             <Flex align="center" gap="10px" wrap="wrap">
               <Text as="h1" m="0" fontFamily="var(--font-serif)" fontWeight={300} fontSize={{ base: '36px', md: '48px' }} lineHeight="1" color="var(--white)">
                 {symbol}-PERP
               </Text>
-              <StageChip stage={stage} />
+              <StageChip stage={onCurve ? 'curve' : 'graduated'} />
             </Flex>
             <Text m="0" mt="6px" fontSize="13px" color="var(--muted)">
               {name} ·{' '}
               <chakra.a href={explorerToken(token)} target="_blank" rel="noopener noreferrer" color="var(--white-80)" className="tabular">
                 {shortAddress(token)}
-              </chakra.a>{' '}
-              · deployed by{' '}
-              <chakra.a href={explorerAddress(info.deployer)} target="_blank" rel="noopener noreferrer" color="var(--white-80)" className="tabular">
-                {shortAddress(info.deployer)}
               </chakra.a>
             </Text>
           </Box>
         </Flex>
         <Box textAlign={{ base: 'left', md: 'right' }}>
           <Text m="0" fontSize={{ base: '32px', md: '40px' }} lineHeight="1" color="var(--white)" className="tabular">
-            {formatPrice(priceUsd)}
+            {formatPrice(price)}
           </Text>
           <Box mt="6px">
             <Change value={change24} fontSize="15px" /> <chakra.span fontSize="13px" color="var(--muted)">24h</chakra.span>
@@ -113,11 +105,11 @@ function MarketView({ token }: { token: Address }) {
       </Flex>
 
       <Panel p={{ base: '18px', md: '20px 28px' }} mb="20px">
-        <Grid templateColumns={{ base: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }} gap="18px">
-          <Stat label="Volume 24h" value={formatUsd(primary?.volume24h ?? quote.data?.volume24h)} />
-          <Stat label="Liquidity" value={formatUsd(liquidity)} sub={primary ? primary.poolName : undefined} />
-          <Stat label="FDV" value={formatUsd(primary?.fdvUsd ?? quote.data?.fdvUsd)} />
-          <Stat label="Holders" value={stats.data ? formatNumber(stats.data.holders) : '…'} />
+        <Grid templateColumns={{ base: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' }} gap="18px">
+          <Stat label="Volume 24h" value={formatUsd(volume24)} />
+          <Stat label="Liquidity" value={onCurve ? 'On curve' : formatUsd(liquidity)} sub={primary && !onCurve ? primary.poolName : undefined} />
+          <Stat label="Market cap" value={formatUsd(primary?.fdvUsd ?? quote.data?.fdvUsd)} />
+          <Stat label={onCurve ? 'Curve progress' : 'Curve'} value={onCurve ? `${(curve.progress * 100).toFixed(1)}%` : 'Graduated'} sub={onCurve ? 'Read on-chain' : 'Trading on PumpSwap'} />
           <Stat
             label="Trades 24h"
             value={primary ? formatNumber(primary.buys24h + primary.sells24h) : '–'}
@@ -130,26 +122,18 @@ function MarketView({ token }: { token: Address }) {
         <Box display="grid" gap="20px" minW="0">
           <Panel overflow="hidden">
             {pools.isSuccess && !primary ? (
-              <EmptyState title="No priced pool yet">
-                This token has no indexed pool with trades yet. The chart and the ticket light up once it trades.
-              </EmptyState>
+              <EmptyState title="No priced pool yet">This token has no indexed pool with trades yet. The chart lights up once it trades.</EmptyState>
             ) : (
               <PriceChart pool={primary?.pool} symbol={symbol} />
             )}
           </Panel>
-          <YourMarket token={token} symbol={symbol} priceUsd={priceUsd} ethUsd={ethUsd} />
+          <YourMarket token={token} symbol={symbol} priceUsd={price} solUsd={solUsd} />
           <RecentTrades pool={primary?.pool} symbol={symbol} />
         </Box>
 
         <Box position={{ base: 'static', lg: 'sticky' }} top="100px" minW="0">
           <Panel p="20px">
-            <Trade.Provider
-              key={`${side}-${hedge || 0}`}
-              market={{ token, symbol, priceUsd, risk }}
-              ethUsd={ethUsd}
-              initialSide={side}
-              hedgeUsd={hedge > 0 ? hedge : undefined}
-            >
+            <Trade.Provider key={`${side}-${hedge || 0}`} market={{ token, symbol, priceUsd: price, risk }} solUsd={solUsd} initialSide={side} hedgeUsd={hedge > 0 ? hedge : undefined}>
               <Box display="grid" gridTemplateColumns="minmax(0, 1fr)" gap="18px">
                 <Trade.SideToggle />
                 <Trade.CollateralInput />
@@ -166,37 +150,29 @@ function MarketView({ token }: { token: Address }) {
   )
 }
 
-function MarketRules({ risk, token }: { risk: MarketRisk; token: Address }) {
+function MarketRules({ risk, token }: { risk: MarketRisk; token: string }) {
   const p = useMarketParams(token, risk)
   return (
     <Box mt="14px" px="4px">
       <Text m="0" fontSize="12px" lineHeight="18px" color="var(--muted)">
-        Isolated margin in ETH. Maintenance margin {(p.maintenanceMarginBps / 100).toFixed(1)}%, open fee {(p.tradingFeeBps / 100).toFixed(2)}%.{' '}
-        {p.source === 'engine'
-          ? 'Parameters read from the engine contract.'
-          : risk.onCurve
-            ? 'This token is still on its bonding curve: up to 2x once it does $25k of daily volume, more after it graduates.'
-            : 'Leverage caps follow pool depth: 3x from $10k, 5x from $50k, 10x from $250k.'}
+        Isolated margin in SOL. Maintenance margin {(p.maintenanceMarginBps / 100).toFixed(1)}%, open fee {(p.tradingFeeBps / 100).toFixed(2)}%.{' '}
+        {risk.onCurve
+          ? 'This token is still on its bonding curve: up to 2x once it does $25k of daily volume, more after it graduates.'
+          : 'Leverage caps follow pool depth: 3x from $10k, 5x from $50k, 10x from $250k.'}
       </Text>
     </Box>
   )
 }
 
-/** The connected wallet's exposure to this token: spot balance and its perps (positions or approved orders). */
-function YourMarket({ token, symbol, priceUsd, ethUsd }: { token: Address; symbol: string; priceUsd: number | undefined; ethUsd: number | undefined }) {
+/** The connected wallet's exposure to this token: spot balance and its approved orders. */
+function YourMarket({ token, symbol, priceUsd, solUsd }: { token: string; symbol: string; priceUsd: number | undefined; solUsd: number | undefined }) {
   const { address, isConnected } = useWalletState()
-  const bal = useReadContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: address ? [address] : undefined, chainId: robinhood.id, query: { enabled: !!address, refetchInterval: 20_000 } })
-  const dec = useReadContract({ address: token, abi: erc20Abi, functionName: 'decimals', chainId: robinhood.id, query: { enabled: !!address, staleTime: Infinity } })
-  const positions = usePositions(address)
-  const orders = useSignedOrders(address)
+  const bal = useQuery({ queryKey: ['token-balance', address, token], queryFn: () => getTokenBalance(address!, token), enabled: !!address, refetchInterval: 20_000 })
+  const orders = useSignedOrders(address).filter((o) => o.market === token)
   if (!isConnected) return null
 
-  const amount = bal.data != null && dec.data != null ? Number(formatUnits(bal.data, dec.data)) : undefined
+  const amount = bal.data
   const value = amount != null && priceUsd ? amount * priceUsd : undefined
-  const isThis = (t: string) => t.toLowerCase() === token.toLowerCase()
-  const rows = engineConfigured
-    ? (positions.data ?? []).filter((p) => isThis(p.token)).map((p) => ({ key: String(p.id), isLong: p.isLong, sizeEth: Number(formatUnits(p.size, 18)), entry: fromWad(p.entryPrice), tag: `#${String(p.id)}` }))
-    : orders.filter((o) => isThis(o.market)).map((o) => ({ key: o.id, isLong: o.isLong, sizeEth: o.sizeEth, entry: o.entryPrice, tag: `${o.leverage}x` }))
 
   return (
     <Panel>
@@ -204,27 +180,27 @@ function YourMarket({ token, symbol, priceUsd, ethUsd }: { token: Address; symbo
       <Flex p="18px 20px" gap="24px" wrap="wrap" align="center" justify="space-between">
         <Flex gap="32px" wrap="wrap">
           <Stat label="Spot balance" value={amount != null ? `${formatNumber(amount, true)} ${symbol}` : '…'} sub={value != null ? formatUsd(value, false) : undefined} />
-          <Stat label={engineConfigured ? 'Open perps' : 'Approved orders'} value={String(rows.length)} />
+          <Stat label="Approved orders" value={String(orders.length)} />
         </Flex>
         {value && value > 1 ? (
-          <PillOutline to={`/app/markets/${token}?side=short&hedge=${value.toFixed(2)}`} tone="rug">
+          <PillOutline to={`/app/markets/${token}?side=short&hedge=${value.toFixed(2)}`} tone="short">
             Hedge spot with a short
           </PillOutline>
         ) : null}
       </Flex>
-      {rows.length > 0 && ethUsd && priceUsd ? (
+      {orders.length > 0 && solUsd && priceUsd ? (
         <Box px="20px" pb="18px" display="grid" gap="8px">
-          {rows.map((r) => {
-            const pnlEth = positionPnlEth({ isLong: r.isLong, sizeEth: r.sizeEth, entryPrice: r.entry }, priceUsd)
+          {orders.map((o) => {
+            const pnl = positionPnl({ isLong: o.isLong, sizeSol: o.sizeSol, entryPrice: o.entryPrice }, priceUsd)
             return (
-              <Flex key={r.key} justify="space-between" gap="10px" wrap="wrap" fontSize="13px" className="tabular">
-                <chakra.span color={r.isLong ? 'var(--accent)' : 'var(--rug)'}>
-                  {r.isLong ? 'Long' : 'Short'} {r.tag}
+              <Flex key={o.id} justify="space-between" gap="10px" wrap="wrap" fontSize="13px" className="tabular">
+                <chakra.span color={o.isLong ? 'var(--long)' : 'var(--short)'}>
+                  {o.isLong ? 'Long' : 'Short'} {o.leverage}x
                 </chakra.span>
                 <span>
-                  {formatUsd(r.sizeEth * ethUsd, false)} at {formatPrice(r.entry)}
+                  {formatUsd(o.sizeSol * solUsd, false)} at {formatPrice(o.entryPrice)}
                 </span>
-                <chakra.span color={pnlEth >= 0 ? 'var(--accent)' : 'var(--rug)'}>{formatUsd(pnlEth * ethUsd, false)}</chakra.span>
+                <chakra.span color={pnl >= 0 ? 'var(--long)' : 'var(--short)'}>{formatUsd(pnl * solUsd, false)}</chakra.span>
               </Flex>
             )
           })}
@@ -258,7 +234,17 @@ function RecentTrades({ pool, symbol }: { pool: string | undefined; symbol: stri
             <thead>
               <tr>
                 {['Side', 'Price', 'Amount', 'Value', 'Wallet', 'Time'].map((h, i) => (
-                  <chakra.th key={h} textAlign={i === 0 ? 'left' : 'right'} fontWeight={400} fontSize="12px" color="var(--muted)" px={{ base: '10px', md: '16px' }} py="8px" display={h === 'Wallet' || h === 'Amount' ? { base: 'none', md: 'table-cell' } : undefined} whiteSpace="nowrap">
+                  <chakra.th
+                    key={h}
+                    textAlign={i === 0 ? 'left' : 'right'}
+                    fontWeight={400}
+                    fontSize="12px"
+                    color="var(--muted)"
+                    px={{ base: '10px', md: '16px' }}
+                    py="8px"
+                    whiteSpace="nowrap"
+                    display={h === 'Wallet' || h === 'Amount' ? { base: 'none', md: 'table-cell' } : undefined}
+                  >
                     {h}
                   </chakra.th>
                 ))}
@@ -267,14 +253,18 @@ function RecentTrades({ pool, symbol }: { pool: string | undefined; symbol: stri
             <tbody>
               {data.map((t) => (
                 <tr key={t.hash + t.at}>
-                  <chakra.td px={{ base: '10px', md: '16px' }} py="6px" color={t.kind === 'buy' ? 'var(--accent)' : 'var(--rug)'}>
+                  <chakra.td px={{ base: '10px', md: '16px' }} py="6px" color={t.kind === 'buy' ? 'var(--long)' : 'var(--short)'}>
                     {t.kind === 'buy' ? 'Buy' : 'Sell'}
                   </chakra.td>
-                  <chakra.td px={{ base: '10px', md: '16px' }} textAlign="right">{formatPrice(t.priceUsd)}</chakra.td>
+                  <chakra.td px={{ base: '10px', md: '16px' }} textAlign="right">
+                    {formatPrice(t.priceUsd)}
+                  </chakra.td>
                   <chakra.td px={{ base: '10px', md: '16px' }} textAlign="right" color="var(--white-80)" whiteSpace="nowrap" display={{ base: 'none', md: 'table-cell' }}>
                     {formatNumber(t.tokenAmount, true)} {symbol}
                   </chakra.td>
-                  <chakra.td px={{ base: '10px', md: '16px' }} textAlign="right">{formatUsd(t.usd, false)}</chakra.td>
+                  <chakra.td px={{ base: '10px', md: '16px' }} textAlign="right">
+                    {formatUsd(t.usd, false)}
+                  </chakra.td>
                   <chakra.td px={{ base: '10px', md: '16px' }} textAlign="right" display={{ base: 'none', md: 'table-cell' }}>
                     <chakra.a href={explorerAddress(t.from)} target="_blank" rel="noopener noreferrer" color="var(--white-80)">
                       {shortAddress(t.from)}

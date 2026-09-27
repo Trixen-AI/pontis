@@ -17,20 +17,17 @@ import {
 } from '@chakra-ui/react'
 import { createContext, use, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import type { Address } from 'viem'
-import { keccak256, parseEther } from 'viem'
-import { useSignTypedData, useSwitchChain } from 'wagmi'
-import { PERPS_ENGINE, PROTOCOL, explorerTx, robinhood } from '@/app/config'
-import { engineConfigured, useEngineTx, useMarketParams, type MarketRisk, type TxState } from '@/app/hooks/usePerps'
-import { useEthBalance, useWalletState } from '@/app/hooks/useWallet'
-import { formatEth, formatNumber, formatPrice, formatUsd } from '@/app/lib/format'
-import { type OrderPreview, type Side, previewOrder, toWad } from '@/app/lib/perps/math'
-import { type SignedOrder, newNonce, orderDomain, orderTypes, saveOrder } from '@/app/lib/perps/order'
-import { openWallet, walletReady } from '@/app/web3/wagmi'
+import { PROTOCOL } from '@/app/config'
+import { useMarketParams, type MarketRisk } from '@/app/hooks/usePerps'
+import { useMessageSigner, useSolBalance, useWalletState } from '@/app/hooks/useWallet'
+import { formatNumber, formatPrice, formatSol, formatUsd } from '@/app/lib/format'
+import { type OrderPreview, type Side, previewOrder } from '@/app/lib/perps/math'
+import { type SignedOrder, newNonce, saveOrder, signOrder } from '@/app/lib/perps/order'
+import { openWallet, walletReady } from '@/app/web3/appkit'
 
-type Market = { token: Address; symbol: string; priceUsd: number | undefined; risk: MarketRisk }
+type Market = { token: string; symbol: string; priceUsd: number | undefined; risk: MarketRisk }
 
-/** Approval of an order: an EIP-712 signature (no engine yet) or an on-chain transaction (engine live). */
+/** Approval of an order: a Solana message signature over the exact order text. */
 type ApproveState =
   | { status: 'idle' }
   | { status: 'signing' }
@@ -50,13 +47,11 @@ type Ctx = {
   meta: {
     market: Market
     params: ReturnType<typeof useMarketParams>
-    ethUsd: number | undefined
-    ethBalance: number | undefined
+    solUsd: number | undefined
+    solBalance: number | undefined
     preview: OrderPreview | null
     hedgeUsd?: number
     approval: ApproveState
-    tx: TxState
-    resetTx: () => void
   }
 }
 
@@ -68,44 +63,45 @@ const useTrade = () => {
 }
 
 const ORDER_TTL_S = 15 * 60
+/** Keep a little SOL back for network fees when "Max" is used. */
+const FEE_RESERVE_SOL = 0.01
 
 type ProviderProps = {
   market: Market
-  ethUsd: number | undefined
+  solUsd: number | undefined
   initialSide?: Side
   /** Pre-size the ticket to hedge a spot holding worth this many USD. */
   hedgeUsd?: number
   children: ReactNode
 }
 
-export function TradeProvider({ market, ethUsd, initialSide = 'long', hedgeUsd, children }: ProviderProps) {
+export function TradeProvider({ market, solUsd, initialSide = 'long', hedgeUsd, children }: ProviderProps) {
   const params = useMarketParams(market.token, market.risk)
   const { address } = useWalletState()
-  const { eth: ethBalance } = useEthBalance(address)
-  const { tx, send, reset } = useEngineTx()
-  const { signTypedDataAsync } = useSignTypedData()
+  const { sol: solBalance } = useSolBalance(address)
+  const sign = useMessageSigner()
 
   const cap = Math.max(1, params.maxLeverage || 1)
   const [side, setSide] = useState<Side>(initialSide)
   // Only explicit choices are stored. Defaults are derived at render time, because the market's
-  // cap and the ETH price usually arrive a moment after the ticket mounts.
+  // cap and the SOL price usually arrive a moment after the ticket mounts.
   const [pickedLeverage, setLeverageRaw] = useState<number | null>(null)
   const [typedCollateral, setCollateral] = useState<string | null>(null)
   const [reviewing, setReviewing] = useState(false)
   const [approval, setApproval] = useState<ApproveState>({ status: 'idle' })
 
   const lev = Math.min(pickedLeverage ?? (hedgeUsd ? 2 : 3), cap)
-  const hedgeCollateral = hedgeUsd && ethUsd ? (hedgeUsd / lev / ethUsd).toFixed(5) : ''
+  const hedgeCollateral = hedgeUsd && solUsd ? (hedgeUsd / lev / solUsd).toFixed(4) : ''
   const collateral = typedCollateral ?? hedgeCollateral
-  const collateralEth = Number(collateral)
+  const collateralSol = Number(collateral)
   const preview =
-    collateralEth > 0 && market.priceUsd && ethUsd
+    collateralSol > 0 && market.priceUsd && solUsd
       ? previewOrder({
           side,
-          collateralEth,
+          collateralSol,
           leverage: lev,
           priceUsd: market.priceUsd,
-          ethUsd,
+          solUsd,
           feeBps: params.tradingFeeBps,
           maintenanceMarginBps: params.maintenanceMarginBps,
           slippageBps: PROTOCOL.slippageBps,
@@ -113,63 +109,34 @@ export function TradeProvider({ market, ethUsd, initialSide = 'long', hedgeUsd, 
       : null
 
   const approve = async () => {
-    if (!preview || !address || !market.priceUsd) return
-    // collateral is exactly what the trader typed; size is rounded to 12 decimals to drop float noise
-    const size = parseEther(preview.sizeEth.toFixed(12))
-    const value = parseEther(collateral.endsWith('.') ? `${collateral}0` : collateral)
-    const acceptable = toWad(preview.acceptablePrice)
-
-    if (PERPS_ENGINE) {
-      // Engine live: approval is the on-chain order itself.
-      setReviewing(false)
-      send({ fn: 'openPosition', args: [market.token, side === 'long', size, acceptable], value })
-      return
-    }
-
+    if (!preview || !address || !market.priceUsd || !sign) return
     setApproval({ status: 'signing' })
-    const nonce = newNonce()
-    const deadline = Math.floor(Date.now() / 1000) + ORDER_TTL_S
     try {
-      const signature = await signTypedDataAsync({
-        domain: orderDomain,
-        types: orderTypes,
-        primaryType: 'Order',
-        message: {
+      const order = await signOrder(
+        {
           trader: address,
           market: market.token,
+          symbol: market.symbol,
           isLong: side === 'long',
-          collateral: value,
-          size,
-          acceptablePrice: acceptable,
-          nonce,
-          deadline: BigInt(deadline),
+          leverage: lev,
+          collateralSol,
+          sizeSol: preview.sizeSol,
+          sizeUsd: preview.sizeUsd,
+          tokenAmount: preview.tokenAmount,
+          entryPrice: market.priceUsd,
+          liquidationPrice: preview.liquidationPrice,
+          acceptablePrice: preview.acceptablePrice,
+          feeSol: preview.feeSol,
+          nonce: newNonce(),
+          deadline: Math.floor(Date.now() / 1000) + ORDER_TTL_S,
         },
-      })
-      const order: SignedOrder = {
-        id: keccak256(signature).slice(0, 18),
-        trader: address,
-        market: market.token,
-        symbol: market.symbol,
-        isLong: side === 'long',
-        leverage: lev,
-        collateralEth,
-        sizeEth: preview.sizeEth,
-        sizeUsd: preview.sizeUsd,
-        tokenAmount: preview.tokenAmount,
-        entryPrice: market.priceUsd,
-        liquidationPrice: preview.liquidationPrice,
-        acceptablePrice: preview.acceptablePrice,
-        feeEth: preview.feeEth,
-        nonce: nonce.toString(),
-        deadline,
-        signature,
-        signedAt: Date.now(),
-      }
+        sign,
+      )
       saveOrder(order)
       setApproval({ status: 'approved', order })
     } catch (e) {
-      const raw = e instanceof Error ? ((e as { shortMessage?: string }).shortMessage ?? e.message) : String(e)
-      setApproval({ status: 'failed', message: /reject|denied|cancel/i.test(raw) ? 'You rejected the request in your wallet.' : raw })
+      const raw = e instanceof Error ? e.message : String(e)
+      setApproval({ status: 'failed', message: /reject|denied|cancel|declin/i.test(raw) ? 'You rejected the request in your wallet.' : raw })
     }
   }
 
@@ -186,10 +153,12 @@ export function TradeProvider({ market, ethUsd, initialSide = 'long', hedgeUsd, 
       closeReview: () => setReviewing(false),
       approve: () => void approve(),
     },
-    meta: { market, params, ethUsd, ethBalance, preview, hedgeUsd, approval, tx, resetTx: reset },
+    meta: { market, params, solUsd, solBalance, preview, hedgeUsd, approval },
   }
   return <TradeCtx value={value}>{children}</TradeCtx>
 }
+
+const sideColors = (side: Side) => (side === 'short' ? { bg: 'var(--short)', color: 'var(--short-ink)' } : { bg: 'var(--long)', color: 'var(--long-ink)' })
 
 export function TradeSideToggle() {
   const { state, actions } = useTrade()
@@ -197,7 +166,7 @@ export function TradeSideToggle() {
     <Flex role="tablist" aria-label="Side" p="4px" gap="4px" border="0.8px solid var(--line)" borderRadius="60px" minW="0">
       {(['long', 'short'] as const).map((s) => {
         const active = state.side === s
-        const bg = s === 'long' ? 'var(--accent)' : 'var(--rug)'
+        const c = sideColors(s)
         return (
           <chakra.button
             key={s}
@@ -212,8 +181,8 @@ export function TradeSideToggle() {
             border="none"
             cursor="pointer"
             fontSize="15px"
-            bg={active ? bg : 'transparent'}
-            color={active ? (s === 'long' ? 'var(--accent-ink)' : 'var(--white)') : 'var(--white-80)'}
+            bg={active ? c.bg : 'transparent'}
+            color={active ? c.color : 'var(--white-80)'}
             transition="background 0.2s, color 0.2s"
           >
             {s === 'long' ? 'Long' : 'Short'}
@@ -226,7 +195,7 @@ export function TradeSideToggle() {
 
 export function TradeCollateral() {
   const { state, actions, meta } = useTrade()
-  const usd = Number(state.collateral) > 0 && meta.ethUsd ? Number(state.collateral) * meta.ethUsd : undefined
+  const usd = Number(state.collateral) > 0 && meta.solUsd ? Number(state.collateral) * meta.solUsd : undefined
   return (
     <Box minW="0">
       <Flex justify="space-between" align="baseline" gap="8px" mb="6px">
@@ -235,21 +204,21 @@ export function TradeCollateral() {
         </chakra.label>
         <chakra.button
           type="button"
-          onClick={() => meta.ethBalance && actions.setCollateral(Math.max(0, meta.ethBalance - 0.0005).toFixed(5))}
-          disabled={!meta.ethBalance}
+          onClick={() => meta.solBalance && actions.setCollateral(Math.max(0, meta.solBalance - FEE_RESERVE_SOL).toFixed(4))}
+          disabled={!meta.solBalance}
           bg="transparent"
           border="none"
           p="0"
           fontSize="12px"
           color="var(--muted)"
-          cursor={meta.ethBalance ? 'pointer' : 'default'}
+          cursor={meta.solBalance ? 'pointer' : 'default'}
           className="tabular"
           minW="0"
           overflow="hidden"
           textOverflow="ellipsis"
           whiteSpace="nowrap"
         >
-          Wallet {formatEth(meta.ethBalance)} {meta.ethBalance ? '· Max' : ''}
+          Wallet {formatSol(meta.solBalance)} {meta.solBalance ? '· Max' : ''}
         </chakra.button>
       </Flex>
       <Flex align="center" gap="10px" h="48px" px="14px" border="0.8px solid var(--line)" borderRadius="12px" bg="var(--ink)" _focusWithin={{ borderColor: 'var(--accent)' }}>
@@ -261,7 +230,7 @@ export function TradeCollateral() {
           value={state.collateral}
           onChange={(e) => {
             const v = e.target.value.replace(',', '.')
-            if (/^\d*\.?\d{0,8}$/.test(v)) actions.setCollateral(v)
+            if (/^\d*\.?\d{0,9}$/.test(v)) actions.setCollateral(v)
           }}
           flex="1"
           minW="0"
@@ -274,11 +243,11 @@ export function TradeCollateral() {
           className="tabular"
         />
         <Text m="0" fontSize="14px" color="var(--white-80)" flexShrink={0}>
-          ETH
+          SOL
         </Text>
       </Flex>
       <Text m="0" mt="6px" fontSize="12px" color="var(--muted)" className="tabular">
-        {usd ? `≈ ${formatUsd(usd, false)}` : 'Margin is posted in ETH on Robinhood Chain.'}
+        {usd ? `≈ ${formatUsd(usd, false)}` : 'Margin is posted in SOL on Solana.'}
       </Text>
     </Box>
   )
@@ -314,13 +283,13 @@ export function TradeLeverage() {
             </SliderMark>
           ))}
           <SliderTrack bg="var(--line)" h="4px">
-            <SliderFilledTrack bg={state.side === 'long' ? 'var(--accent)' : 'var(--rug)'} />
+            <SliderFilledTrack bg={state.side === 'long' ? 'var(--long)' : 'var(--short)'} />
           </SliderTrack>
           <SliderThumb boxSize="16px" bg="var(--white)" />
         </Slider>
       </Box>
       <Text m="0" fontSize="12px" color="var(--muted)">
-        Max {max}x on this market{meta.params.source === 'defaults' ? ', set by pool depth' : ''}.
+        Max {max}x on this market, set by {meta.market.risk.onCurve ? 'curve activity' : 'pool depth'}.
       </Text>
     </Box>
   )
@@ -351,9 +320,9 @@ function OrderRows() {
       <Row
         label="Liquidation price"
         value={p ? `${formatPrice(p.liquidationPrice)} (${(p.liquidationDistance * 100).toFixed(1)}% away)` : '–'}
-        tone={warnLiq ? 'var(--rug)' : undefined}
+        tone={warnLiq ? 'var(--short)' : undefined}
       />
-      <Row label={`Open fee (${(meta.params.tradingFeeBps / 100).toFixed(2)}%)`} value={p ? formatEth(p.feeEth, 6) : '–'} />
+      <Row label={`Open fee (${(meta.params.tradingFeeBps / 100).toFixed(2)}%)`} value={p ? formatSol(p.feeSol, 6) : '–'} />
       <Row label={`Price protection (${PROTOCOL.slippageBps / 100}%)`} value={p ? formatPrice(p.acceptablePrice) : '–'} />
     </>
   )
@@ -373,26 +342,19 @@ export function TradeSummary() {
   )
 }
 
-const sideColors = (side: Side) =>
-  side === 'short' ? { bg: 'var(--rug)', color: 'var(--white)' } : { bg: 'var(--accent)', color: 'var(--accent-ink)' }
-
 export function TradeSubmit() {
   const { state, actions, meta } = useTrade()
-  const { isConnected, wrongNetwork } = useWalletState()
-  const { switchChain } = useSwitchChain()
+  const { isConnected } = useWalletState()
   const amount = Number(state.collateral)
-  const busy = meta.tx.status === 'signing' || meta.tx.status === 'pending'
 
   let label: string
   let onClick: (() => void) | undefined
   if (!walletReady) label = 'Wallet not configured'
   else if (!isConnected) [label, onClick] = ['Connect wallet', () => openWallet()]
-  else if (wrongNetwork) [label, onClick] = ['Switch to Robinhood Chain', () => switchChain({ chainId: robinhood.id })]
   else if (!meta.params.listed) label = 'View only: liquidity too thin'
   else if (!(amount > 0)) label = 'Enter collateral'
-  else if (meta.ethBalance != null && amount > meta.ethBalance) label = 'Not enough ETH'
-  else if (!meta.market.priceUsd || !meta.ethUsd) label = 'Waiting for price'
-  else if (busy) label = meta.tx.status === 'signing' ? 'Confirm in wallet…' : 'Opening position…'
+  else if (meta.solBalance != null && amount > meta.solBalance) label = 'Not enough SOL'
+  else if (!meta.market.priceUsd || !meta.solUsd) label = 'Waiting for price'
   else [label, onClick] = [`Review ${state.side} ${state.leverage}x`, actions.openReview]
 
   const c = sideColors(state.side)
@@ -401,27 +363,26 @@ export function TradeSubmit() {
       <chakra.button
         type="button"
         onClick={onClick}
-        disabled={!onClick || busy}
+        disabled={!onClick}
         w="100%"
         h="48px"
         borderRadius="60px"
         border="none"
         fontSize="16px"
-        cursor={onClick && !busy ? 'pointer' : 'not-allowed'}
+        cursor={onClick ? 'pointer' : 'not-allowed'}
         bg={c.bg}
         color={c.color}
-        opacity={onClick && !busy ? 1 : 0.5}
+        opacity={onClick ? 1 : 0.5}
         transition="opacity 0.2s"
       >
         {label}
       </chakra.button>
-      <TxStatus tx={meta.tx} onDismiss={meta.resetTx} />
       <ReviewSheet />
     </Box>
   )
 }
 
-/** Review step: the exact order, then Approve (wallet signature, or the on-chain order once the engine is live). */
+/** Review step: the exact order, then Approve (signed in the wallet). */
 function ReviewSheet() {
   const { state, actions, meta } = useTrade()
   const a = meta.approval
@@ -430,7 +391,7 @@ function ReviewSheet() {
   const approved = a.status === 'approved'
   return (
     <Modal isOpen={state.reviewing} onClose={actions.closeReview} isCentered motionPreset="slideInBottom" closeOnOverlayClick={a.status !== 'signing'}>
-      <ModalOverlay bg="rgba(8,12,9,0.72)" backdropFilter="blur(2px)" />
+      <ModalOverlay bg="rgba(10,10,11,0.75)" backdropFilter="blur(2px)" />
       <ModalContent bg="var(--ink-2)" border="0.8px solid var(--line)" borderRadius="20px" mx="16px" maxW="420px" color="var(--white-92)">
         <ModalBody p={{ base: '20px', md: '24px' }}>
           <Flex align="center" justify="space-between" gap="12px">
@@ -442,17 +403,17 @@ function ReviewSheet() {
             </chakra.span>
           </Flex>
           <Text m="0" mt="6px" fontSize="14px" color="var(--muted)">
-            {meta.market.symbol}-PERP on Robinhood Chain
+            {meta.market.symbol}-PERP on Solana
           </Text>
 
           <Box mt="18px" p="14px 16px" border="0.8px solid var(--line)" borderRadius="12px" bg="var(--ink)">
-            <Row label="Collateral" value={p ? `${formatEth(Number(state.collateral), 6)} · ${formatUsd(Number(state.collateral) * (meta.ethUsd ?? 0), false)}` : '–'} />
+            <Row label="Collateral" value={p ? `${formatSol(Number(state.collateral), 6)} · ${formatUsd(Number(state.collateral) * (meta.solUsd ?? 0), false)}` : '–'} />
             <OrderRows />
             <Row label="Valid for" value="15 minutes" />
           </Box>
 
           {a.status === 'failed' && (
-            <Text m="0" mt="12px" fontSize="13px" color="var(--rug)" role="alert">
+            <Text m="0" mt="12px" fontSize="13px" color="var(--short)" role="alert">
               {a.message}
             </Text>
           )}
@@ -462,7 +423,7 @@ function ReviewSheet() {
             </Text>
           ) : (
             <Text m="0" mt="12px" fontSize="12px" lineHeight="18px" color="var(--muted)">
-              {engineConfigured ? 'Approving sends this order to the Pontis engine with your collateral.' : 'Approving signs this exact order in your wallet. No funds move.'}
+              Approving signs this exact order in your wallet. No funds move.
             </Text>
           )}
 
@@ -528,28 +489,5 @@ function ReviewSheet() {
         </ModalBody>
       </ModalContent>
     </Modal>
-  )
-}
-
-function TxStatus({ tx, onDismiss }: { tx: TxState; onDismiss: () => void }) {
-  if (tx.status === 'idle' || tx.status === 'signing') return null
-  const hash = 'hash' in tx ? tx.hash : undefined
-  const text = tx.status === 'pending' ? 'Waiting for confirmation on Robinhood Chain.' : tx.status === 'confirmed' ? 'Position opened.' : tx.message
-  return (
-    <Flex mt="10px" justify="space-between" align="center" gap="10px" fontSize="12px" color={tx.status === 'failed' ? 'var(--rug)' : 'var(--white-80)'} role="status">
-      <span>
-        {text}{' '}
-        {hash && (
-          <chakra.a href={explorerTx(hash)} target="_blank" rel="noopener noreferrer" color="var(--accent)">
-            View tx
-          </chakra.a>
-        )}
-      </span>
-      {tx.status !== 'pending' && (
-        <chakra.button type="button" onClick={onDismiss} bg="transparent" border="none" color="var(--muted)" cursor="pointer" fontSize="12px">
-          Dismiss
-        </chakra.button>
-      )}
-    </Flex>
   )
 }

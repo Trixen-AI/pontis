@@ -1,5 +1,5 @@
 // Small shared building blocks for the dashboard, in the website's visual language:
-// ink panels with hairline borders, lime for the long side, coral for the short side.
+// ink panels with hairline borders, mint for the long side, orange for the short side.
 import { Box, Flex, Text, chakra, type BoxProps } from '@chakra-ui/react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
@@ -70,7 +70,7 @@ export function Change({ value, fontSize = '14px' }: { value: number | undefined
   )
 }
 
-const STAGE_LABEL: Record<Stage, string> = { curve: 'Curve', graduated: 'Graduated', legacy: 'V1', dex: 'DEX' }
+const STAGE_LABEL: Record<Stage, string> = { curve: 'Curve', graduated: 'Graduated', dex: 'DEX' }
 export function StageChip({ stage }: { stage: Stage | 'graduating' }) {
   const curve = stage === 'curve' || stage === 'graduating'
   return (
@@ -84,7 +84,7 @@ export function StageChip({ stage }: { stage: Stage | 'graduating' }) {
       lineHeight="20px"
       whiteSpace="nowrap"
       color={curve ? 'var(--accent)' : 'var(--muted)'}
-      border={`0.8px solid ${curve ? 'rgba(210,255,77,0.45)' : 'var(--line)'}`}
+      border={`0.8px solid ${curve ? 'rgba(249,133,0,0.5)' : 'var(--line)'}`}
     >
       {stage === 'graduating' ? 'Graduating' : STAGE_LABEL[stage]}
     </chakra.span>
@@ -117,7 +117,7 @@ export function TokenAvatar({ src, symbol, size = 28 }: { src?: string; symbol: 
 
 type PillProps = { children: ReactNode; to?: string; onClick?: () => void; disabled?: boolean; type?: 'button' | 'submit' }
 
-/** Website pill CTA, filled lime. */
+/** Website pill CTA, filled orange. */
 export function PillSolid({ children, to, onClick, disabled, type = 'button' }: PillProps) {
   const style = {
     display: 'inline-flex',
@@ -141,8 +141,8 @@ export function PillSolid({ children, to, onClick, disabled, type = 'button' }: 
 }
 
 /** Website pill CTA, hairline outline. */
-export function PillOutline({ children, to, onClick, disabled, tone = 'accent' }: PillProps & { tone?: 'accent' | 'rug' | 'muted' }) {
-  const color = tone === 'rug' ? 'var(--rug)' : tone === 'muted' ? 'var(--white-80)' : 'var(--accent)'
+export function PillOutline({ children, to, onClick, disabled, tone = 'accent' }: PillProps & { tone?: 'accent' | 'long' | 'short' | 'muted' }) {
+  const color = tone === 'long' ? 'var(--long)' : tone === 'short' ? 'var(--short)' : tone === 'muted' ? 'var(--white-80)' : 'var(--accent)'
   const style = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -231,8 +231,8 @@ export function Skeleton({ h = '16px', w = '100%' }: { h?: string; w?: string })
 /** Notice box for configuration or engine state. */
 export function Notice({ tone = 'info', title, children }: { tone?: 'info' | 'warn'; title: ReactNode; children?: ReactNode }) {
   return (
-    <Box border={`0.8px solid ${tone === 'warn' ? 'rgba(255,106,85,0.55)' : 'rgba(210,255,77,0.4)'}`} bg={tone === 'warn' ? 'rgba(255,106,85,0.06)' : 'rgba(210,255,77,0.05)'} borderRadius="12px" px="16px" py="12px">
-      <Text m="0" fontSize="14px" lineHeight="20px" color={tone === 'warn' ? 'var(--rug)' : 'var(--accent)'}>
+    <Box border={`0.8px solid ${tone === 'warn' ? 'rgba(249,133,0,0.55)' : 'var(--line)'}`} bg={tone === 'warn' ? 'rgba(249,133,0,0.07)' : 'var(--ink-3)'} borderRadius="12px" px="16px" py="12px">
+      <Text m="0" fontSize="14px" lineHeight="20px" color="var(--accent)">
         {title}
       </Text>
       {children && (

@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react'
 
-// Full-bleed looping backdrop: soft lime glows and ink shadows drifting on slow Lissajous paths.
+// Full-bleed looping backdrop: soft orange and mint glows and ink shadows drifting on slow Lissajous paths.
 // Rendered to a small canvas and scaled up with CSS so the gradients stay smooth and cheap.
 type Glow = { x: number; y: number; r: number; ax: number; ay: number; fx: number; fy: number; p: number; color: string; alpha: number }
 
 const GLOWS: Glow[] = [
-  { x: 0.08, y: 0.78, r: 0.55, ax: 0.08, ay: 0.1, fx: 0.07, fy: 0.05, p: 0.0, color: '210,255,77', alpha: 0.85 },
-  { x: 0.22, y: 0.35, r: 0.42, ax: 0.1, ay: 0.08, fx: 0.05, fy: 0.08, p: 1.3, color: '118,168,52', alpha: 0.55 },
-  { x: 0.72, y: 0.2, r: 0.5, ax: 0.12, ay: 0.06, fx: 0.04, fy: 0.06, p: 2.1, color: '70,110,40', alpha: 0.5 },
-  { x: 0.9, y: 0.7, r: 0.38, ax: 0.06, ay: 0.12, fx: 0.06, fy: 0.035, p: 3.4, color: '160,210,60', alpha: 0.35 },
-  { x: 0.5, y: 0.95, r: 0.45, ax: 0.14, ay: 0.05, fx: 0.03, fy: 0.07, p: 4.2, color: '95,140,45', alpha: 0.45 },
+  { x: 0.08, y: 0.78, r: 0.55, ax: 0.08, ay: 0.1, fx: 0.07, fy: 0.05, p: 0.0, color: '249,133,0', alpha: 0.6 },
+  { x: 0.22, y: 0.35, r: 0.42, ax: 0.1, ay: 0.08, fx: 0.05, fy: 0.08, p: 1.3, color: '160,82,0', alpha: 0.55 },
+  { x: 0.72, y: 0.2, r: 0.5, ax: 0.12, ay: 0.06, fx: 0.04, fy: 0.06, p: 2.1, color: '90,48,0', alpha: 0.5 },
+  { x: 0.9, y: 0.7, r: 0.38, ax: 0.06, ay: 0.12, fx: 0.06, fy: 0.035, p: 3.4, color: '113,207,163', alpha: 0.3 },
+  { x: 0.5, y: 0.95, r: 0.45, ax: 0.14, ay: 0.05, fx: 0.03, fy: 0.07, p: 4.2, color: '200,105,0', alpha: 0.4 },
 ]
 // Dark lobes carve depth into the light, like overlapping shapes in front of the glow.
 const SHADOWS = [
@@ -42,7 +42,7 @@ export function HeroField() {
       const h = canvas.height
       const m = Math.max(w, h)
       ctx.globalCompositeOperation = 'source-over'
-      ctx.fillStyle = '#0e1510'
+      ctx.fillStyle = '#0a0a0b'
       ctx.fillRect(0, 0, w, h)
       ctx.globalCompositeOperation = 'lighter'
       for (const g of GLOWS) {
@@ -62,8 +62,8 @@ export function HeroField() {
         const cy = (s.y + Math.cos(t * s.fy + s.p) * s.ay) * h
         const r = s.r * m
         const grad = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r)
-        grad.addColorStop(0, 'rgba(10,16,11,0.82)')
-        grad.addColorStop(1, 'rgba(10,16,11,0)')
+        grad.addColorStop(0, 'rgba(10,10,11,0.82)')
+        grad.addColorStop(1, 'rgba(10,10,11,0)')
         ctx.fillStyle = grad
         ctx.beginPath()
         ctx.arc(cx, cy, r, 0, Math.PI * 2)
@@ -71,8 +71,8 @@ export function HeroField() {
       }
       // vignette toward the lower right, keeps the headline area calm
       const v = ctx.createLinearGradient(0, 0, w, h)
-      v.addColorStop(0.35, 'rgba(14,21,16,0)')
-      v.addColorStop(1, 'rgba(14,21,16,0.75)')
+      v.addColorStop(0.35, 'rgba(10,10,11,0)')
+      v.addColorStop(1, 'rgba(10,10,11,0.75)')
       ctx.fillStyle = v
       ctx.fillRect(0, 0, w, h)
     }

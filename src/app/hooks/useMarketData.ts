@@ -1,28 +1,21 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import type { Address } from 'viem'
-import { PONS, PONS_DEXES } from '@/app/config'
-import { getEthUsd, getTokenStats } from '@/app/lib/api/blockscout'
-import { getQuotes } from '@/app/lib/api/dexscreener'
-import { type Market, type Timeframe, getCandles, getDexMarkets, getTokenMarkets, getTrades } from '@/app/lib/api/gecko'
-import { getPonsInfo } from '@/app/lib/pons'
+import { PUMP_DEXES } from '@/app/config'
+import { getQuotes, withDexLiquidity } from '@/app/lib/api/dexscreener'
+import { type Market, type Timeframe, getCandles, getDexMarkets, getNewPumpMarkets, getTokenMarkets, getTrades } from '@/app/lib/api/gecko'
+import { getBondingCurve, getBondingCurves } from '@/app/lib/solana'
 
 const MIN = 60_000
 
-export function useEthUsd() {
-  return useQuery({ queryKey: ['eth-usd'], queryFn: ({ signal }) => getEthUsd(signal), staleTime: MIN, refetchInterval: MIN })
-}
-
 const SOURCES = [
-  { key: 'graduated', load: (s?: AbortSignal) => getDexMarkets(PONS_DEXES.graduated, 'volume', s) },
-  { key: 'curve', load: (s?: AbortSignal) => getDexMarkets(PONS_DEXES.curve, 'volume', s) },
-  { key: 'legacy', load: (s?: AbortSignal) => getDexMarkets(PONS_DEXES.legacy, 'volume', s) },
-  { key: 'pons', load: (s?: AbortSignal) => getTokenMarkets(PONS.token, s) },
+  { key: 'curve', load: (s?: AbortSignal) => getDexMarkets(PUMP_DEXES.curve, s) },
+  { key: 'graduated', load: (s?: AbortSignal) => getDexMarkets(PUMP_DEXES.graduated, s) },
 ] as const
 
 /**
- * Every PONS market we can price: the top pools of each Pons dex plus PONS itself.
- * One row per token (its deepest pool). Sources stream in independently.
+ * Every Pump.fun market we can price: the most traded bonding curves plus the most traded PumpSwap pools.
+ * PumpSwap is open to any token, so every pool is checked on-chain against the Pump.fun bonding-curve
+ * program and only real Pump.fun launches are kept. One row per token (its most traded pool). PumpSwap liquidity comes from DexScreener.
  */
 export function useMarkets() {
   const results = useQueries({
@@ -33,33 +26,70 @@ export function useMarkets() {
       refetchInterval: MIN,
     })),
   })
-  const markets = useMemo(() => {
+  const stamp = results.map((r) => r.dataUpdatedAt).join()
+  const candidates = useMemo(() => {
     const byToken = new Map<string, Market>()
     for (const r of results) {
       for (const m of r.data ?? []) {
-        const key = m.token.toLowerCase()
-        const prev = byToken.get(key)
-        if (!prev || (m.liquidityUsd || 0) > (prev.liquidityUsd || 0)) byToken.set(key, m)
+        const prev = byToken.get(m.token)
+        if (!prev || (m.volume24h || 0) > (prev.volume24h || 0)) byToken.set(m.token, m)
       }
     }
     return [...byToken.values()]
+    // results is a new array each render; the timestamps say when its data actually changed
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results.map((r) => r.dataUpdatedAt).join()])
+  }, [stamp])
+
+  const mints = candidates.map((m) => m.token).sort().join(',')
+  const verified = useQuery({
+    queryKey: ['pump-verify', mints],
+    queryFn: async ({ signal }) => {
+      const curves = await getBondingCurves(candidates.map((m) => m.token))
+      const liquid = await withDexLiquidity(
+        candidates.filter((m) => curves.get(m.token)?.complete),
+        signal,
+      )
+      return { curves, liquidity: new Map(liquid.map((m) => [m.token, m.liquidityUsd])) }
+    },
+    enabled: candidates.length > 0,
+    staleTime: 5 * MIN,
+    placeholderData: (prev) => prev,
+  })
+
+  const markets = useMemo(
+    () =>
+      verified.data
+        ? candidates.flatMap((m) => {
+            const c = verified.data.curves.get(m.token)
+            if (!c) return [] // not a Pump.fun launch
+            const stage = c.complete ? ('graduated' as const) : ('curve' as const)
+            return [{ ...m, stage, progress: c.progress, liquidityUsd: verified.data.liquidity.get(m.token) ?? m.liquidityUsd }]
+          })
+        : [],
+    [candidates, verified.data],
+  )
+
   return {
     markets,
-    isLoading: results.every((r) => r.isPending),
-    isFetching: results.some((r) => r.isFetching),
-    loaded: results.filter((r) => r.isSuccess).length,
-    total: results.length,
+    isLoading: results.every((r) => r.isPending) || (candidates.length > 0 && verified.isPending),
+    loaded: results.filter((r) => r.isSuccess).length + (verified.isSuccess ? 1 : 0),
+    total: results.length + 1,
     updatedAt: Math.max(0, ...results.map((r) => r.dataUpdatedAt)),
-    failed: results.filter((r) => r.isError).length,
+    failed: results.filter((r) => r.isError).length + (verified.isError ? 1 : 0),
   }
 }
 
 export function useNewCurveMarkets(enabled: boolean) {
   return useQuery({
     queryKey: ['markets', 'curve-new'],
-    queryFn: ({ signal }) => getDexMarkets(PONS_DEXES.curve, 'new', signal),
+    queryFn: async ({ signal }) => {
+      const fresh = (await getNewPumpMarkets(1, signal)).filter((m) => m.stage === 'curve')
+      const curves = await getBondingCurves(fresh.map((m) => m.token))
+      return fresh.flatMap((m) => {
+        const c = curves.get(m.token)
+        return c ? [{ ...m, progress: c.progress }] : []
+      })
+    },
     enabled,
     staleTime: 30_000,
     refetchInterval: enabled ? 30_000 : false,
@@ -67,12 +97,12 @@ export function useNewCurveMarkets(enabled: boolean) {
 }
 
 /** Everything the market page needs, fetched in parallel. */
-export function useMarket(token: Address | undefined) {
+export function useMarket(token: string | undefined) {
   const verify = useQuery({
-    queryKey: ['pons-info', token],
-    queryFn: () => getPonsInfo(token!),
+    queryKey: ['pump-curve', token],
+    queryFn: () => getBondingCurve(token!),
     enabled: !!token,
-    staleTime: 5 * MIN,
+    refetchInterval: 30_000,
   })
   const pools = useQuery({
     queryKey: ['token-pools', token],
@@ -83,20 +113,14 @@ export function useMarket(token: Address | undefined) {
   })
   const quote = useQuery({
     queryKey: ['quote', token],
-    queryFn: async ({ signal }) => (await getQuotes([token!], signal)).get(token!.toLowerCase()) ?? null,
+    queryFn: async ({ signal }) => (await getQuotes([token!], signal)).get(token!) ?? null,
     enabled: !!token,
     refetchInterval: 15_000,
-  })
-  const stats = useQuery({
-    queryKey: ['token-stats', token],
-    queryFn: ({ signal }) => getTokenStats(token!, signal),
-    enabled: !!token,
-    staleTime: 5 * MIN,
   })
   const primary = pools.data?.[0]
   // Live price: DexScreener refreshes fastest; fall back to the pool snapshot.
   const priceUsd = quote.data?.priceUsd && Number.isFinite(quote.data.priceUsd) ? quote.data.priceUsd : primary?.priceUsd
-  return { verify, pools, quote, stats, primary, priceUsd }
+  return { verify, pools, quote, primary, priceUsd }
 }
 
 export function useCandles(pool: string | undefined, tf: Timeframe) {

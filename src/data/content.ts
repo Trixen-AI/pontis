@@ -10,35 +10,32 @@ export const nav = {
 }
 
 export const hero = {
-  title: ['Perps for Every', 'PONS Token'],
-  body: [
-    'Long the runners. Short the rugs.',
-    'Leverage on any PONS launch, settled on Robinhood Chain.',
-  ],
+  title: ['Perps for Every', 'Pump.fun Token'],
+  body: ['Long the runners. Short the rugs.', 'Leverage on any Pump.fun launch, settled on Solana.'],
   primary: { label: 'Go Long', href: '/app/markets?tab=runners' },
   secondary: { label: 'Go Short', href: '/app/markets?tab=rugs' },
 }
 
 export const stack = {
   titleBefore: 'Inside',
-  titleAfter: 'Perps',
+  titleAfter: '',
   /** One entry per scroll step. `focus` names what the scene lights up. */
   steps: [
     {
       focus: 'sides',
-      text: 'Every PONS token gets two sides. Go long while a launch is running, go short the moment it starts to slide.',
+      text: 'Every Pump.fun token gets two sides. Go long while a launch is running, go short the moment it starts to slide.',
     },
     {
       focus: 'markets',
-      text: 'Each market ships with funding, a mark price, liquidations and an insurance fund from its first block of trading.',
+      text: 'Each market ships with funding, a mark price, liquidations and an insurance fund from its first trade.',
     },
     {
       focus: 'engines',
-      text: 'The Listing Engine picks up a new PONS token as it launches and hands it to the Perp Engine, which opens the market. No listing form and no waiting list.',
+      text: 'The Listing Engine picks up a new Pump.fun token straight off its bonding curve and hands it to the Perp Engine, which opens the market. No listing form and no waiting list.',
     },
     {
       focus: 'chain',
-      text: 'Robinhood Chain sits underneath it all. Orders, margin and settlement land onchain, so any position can be checked by anyone.',
+      text: 'Solana sits underneath it all. Orders, margin and settlement land onchain, so any position can be checked by anyone.',
     },
   ],
   candles: [
@@ -50,17 +47,17 @@ export const stack = {
     { id: 'insurance', label: 'Insurance Fund', side: 'long' },
     { id: 'vaults', label: 'Vaults', side: 'long' },
     { id: 'listings', label: 'New Listings', side: 'long' },
-    { id: 'every', label: 'Every PONS Token', side: 'long' },
+    { id: 'every', label: 'Every Pump.fun Token', side: 'long' },
   ],
-  plates: { left: 'Listing Engine', right: 'Perp Engine', base: 'Robinhood Chain' },
+  plates: { left: 'Listing Engine', right: 'Perp Engine', base: 'Solana' },
 } as const
 
 // PLACEHOLDER figures: product targets for the concept, not live data.
 export const stats = [
-  { label: 'Listing delay', value: '1 block' },
+  { label: 'Listing delay', value: 'First trade' },
   { label: 'Max leverage', value: '10x' },
   { label: 'Sides', value: 'Long + Short' },
-  { label: 'Settles on', value: 'Robinhood Chain' },
+  { label: 'Settles on', value: 'Solana' },
 ]
 
 export const pledge = {
@@ -71,9 +68,9 @@ export const pledge = {
 export const statement = {
   // [text, highlighted?] runs, one array per line
   lines: [
-    [['Every ', false], ['PONS token', true], [' that lists', false]],
+    [['Every ', false], ['Pump.fun token', true], [' that lists', false]],
     [['opens a ', false], ['perp market', true], [' with it,', false]],
-    [['live on ', false], ['Robinhood Chain.', true]],
+    [['live on ', false], ['Solana.', true]],
   ] as [string, boolean][][],
   primary: { label: 'Go Long', href: '/app/markets?tab=runners' },
   secondary: { label: 'Go Short', href: '/app/markets?tab=rugs' },
@@ -91,20 +88,4 @@ export const footer = {
 }
 
 /** Social links. Add an entry here (and its icon in SocialIcons.tsx) to show another platform. */
-export const socials = [
-  { key: 'x', label: 'Pontis on X', href: 'https://x.com/Pontis_xyz' },
-] as const
-
-/** The PONT token (verified on Robinhood Chain: name "Pontis", symbol PONT, 18 decimals, 1B supply). */
-export const token = {
-  symbol: 'PONT',
-  address: '0xB6bae42DDa947F56bd942321F5Fc4edFf341A4db',
-  explorer: 'https://robinhoodchain.blockscout.com/token/0xB6bae42DDa947F56bd942321F5Fc4edFf341A4db',
-} as const
-
-/** Android app. The file is served from public/downloads; replace it there to ship a new build. */
-export const androidApp = {
-  href: '/downloads/Pontis.apk',
-  fileName: 'Pontis.apk',
-  size: '9.5 MB',
-} as const
+export const socials = [{ key: 'x', label: 'FunPerps on X', href: 'https://x.com/FunPerps_xyz' }] as const
