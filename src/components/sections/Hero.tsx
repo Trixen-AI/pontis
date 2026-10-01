@@ -1,6 +1,5 @@
 import { Box, Flex, Heading, Text } from '@chakra-ui/react'
 import { Mark } from '@/components/ui/Brand'
-import { CaChip } from '@/components/ui/CaChip'
 import { PillButton } from '@/components/ui/PillButton'
 import { hero } from '@/data/content'
 import { HeroField } from './HeroField'
@@ -12,7 +11,7 @@ export function Hero() {
       <HeroField />
       <Flex position="absolute" inset="0" p="20px" align="center" justify="center">
         <Flex direction="column" align="center" textAlign="center" maxW="var(--container)" w="100%">
-          <Mark size={100} animate title="FunPerps" />
+          <Mark size={100} animate title="Ponsia Perps" />
           <Heading
             as="h1"
             m="0"
@@ -37,9 +36,6 @@ export function Hero() {
             <PillButton href={hero.secondary.href} variant="outline">
               {hero.secondary.label}
             </PillButton>
-          </Flex>
-          <Flex pt="24px" justify="center" maxW="100%">
-            <CaChip />
           </Flex>
         </Flex>
       </Flex>

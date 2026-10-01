@@ -20,7 +20,7 @@ export function Nav() {
         borderRadius="37px"
         p="8px 8px 8px 16px"
       >
-        <chakra.a as={Link} {...{ to: '/' }} display="flex" alignItems="center" aria-label="FunPerps home" color="var(--ink)">
+        <chakra.a as={Link} {...{ to: '/' }} display="flex" alignItems="center" aria-label="Ponsia Perps home" color="var(--ink)">
           <Lockup height={28} />
         </chakra.a>
         <Flex align="center" gap="40px">

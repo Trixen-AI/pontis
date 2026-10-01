@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://funperps.xyz/sitemap.xml
+Sitemap: https://ponsia.xyz/sitemap.xml

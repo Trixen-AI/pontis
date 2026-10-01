@@ -11,10 +11,10 @@
       "has": [
         {
           "type": "host",
-          "value": "www.funperps.xyz"
+          "value": "www.ponsia.xyz"
         }
       ],
-      "destination": "https://funperps.xyz/:path*",
+      "destination": "https://ponsia.xyz/:path*",
       "permanent": true
     }
   ],

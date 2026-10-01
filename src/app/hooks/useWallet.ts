@@ -1,46 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
-import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
-import type { Provider } from '@reown/appkit-adapter-solana/react'
-import { getQuotes, getSolUsd } from '@/app/lib/api/dexscreener'
+import type { Address } from 'viem'
+import { formatUnits } from 'viem'
+import { useAccount, useBalance } from 'wagmi'
+import { robinhood } from '@/app/config'
+import { getActivity, getHoldings } from '@/app/lib/api/blockscout'
+import { getQuotes } from '@/app/lib/api/dexscreener'
 import { getTokenPrices } from '@/app/lib/api/gecko'
-import { getActivity, getBondingCurves, getSolBalance, getWalletTokens } from '@/app/lib/solana'
-import { walletReady } from '@/app/web3/appkit'
+import { filterPonsTokens } from '@/app/lib/pons'
 
-export type WalletState = { address?: string; isConnected: boolean; connecting: boolean }
-
-// AppKit hooks throw when AppKit was never created (no project ID), so pick the implementation once,
-// at module load. Each variant always calls the same hooks, so the rules of hooks hold.
-function useWalletAppKit(): WalletState {
-  const a = useAppKitAccount({ namespace: 'solana' })
-  return { address: a.isConnected ? a.address : undefined, isConnected: a.isConnected, connecting: a.status === 'connecting' || a.status === 'reconnecting' }
-}
-function useWalletNone(): WalletState {
-  return { address: undefined, isConnected: false, connecting: false }
-}
-export const useWalletState = walletReady ? useWalletAppKit : useWalletNone
-
-type Signer = (message: Uint8Array) => Promise<Uint8Array>
-function useSignerAppKit(): Signer | undefined {
-  const { walletProvider } = useAppKitProvider<Provider>('solana')
-  return walletProvider ? (message) => walletProvider.signMessage(message) : undefined
-}
-function useSignerNone(): Signer | undefined {
-  return undefined
-}
-/** Signs raw bytes with the connected Solana wallet (used to approve orders). */
-export const useMessageSigner = walletReady ? useSignerAppKit : useSignerNone
-
-export function useSolUsd() {
-  return useQuery({ queryKey: ['sol-usd'], queryFn: ({ signal }) => getSolUsd(signal), staleTime: 60_000, refetchInterval: 60_000 })
+/** Connection status, reduced to what the UI branches on. */
+export function useWalletState() {
+  const { address, isConnected, status, chainId } = useAccount()
+  const wrongNetwork = isConnected && chainId != null && chainId !== robinhood.id
+  return { address, isConnected, connecting: status === 'connecting' || status === 'reconnecting', wrongNetwork }
 }
 
-export function useSolBalance(address: string | undefined) {
-  const q = useQuery({ queryKey: ['sol-balance', address], queryFn: () => getSolBalance(address!), enabled: !!address, refetchInterval: 15_000 })
-  return { ...q, sol: q.data }
+export function useEthBalance(address: Address | undefined) {
+  const q = useBalance({ address, chainId: robinhood.id, query: { enabled: !!address, refetchInterval: 15_000 } })
+  return { ...q, eth: q.data ? Number(formatUnits(q.data.value, q.data.decimals)) : undefined }
 }
 
-export type PumpHolding = {
-  token: string
+export type PonsHolding = {
+  token: Address
   symbol: string
   name: string
   icon?: string
@@ -54,40 +35,43 @@ export type PumpHolding = {
 }
 
 /**
- * The wallet's Pump.fun tokens: every SPL / Token-2022 balance, kept only when the mint has a
- * Pump.fun bonding curve on-chain, then priced (DexScreener, GeckoTerminal, else the curve itself).
+ * The wallet's PONS tokens: every ERC-20 it holds, filtered on-chain against the Pons factories,
+ * then priced. Non-PONS tokens are counted but not listed.
  */
-export function usePumpHoldings(address: string | undefined) {
+export function usePonsHoldings(address: Address | undefined) {
   return useQuery({
-    queryKey: ['pump-holdings', address],
+    queryKey: ['pons-holdings', address],
     enabled: !!address,
     refetchInterval: 30_000,
     queryFn: async ({ signal }) => {
-      const all = await getWalletTokens(address!)
-      const curves = await getBondingCurves(all.map((t) => t.mint))
-      const mine = all.filter((t) => curves.has(t.mint))
-      const mints = mine.map((t) => t.mint)
-      const [quotes, solUsd] = await Promise.all([getQuotes(mints, signal), getSolUsd(signal).catch(() => NaN)])
-      const missing = mints.filter((m) => !quotes.has(m))
-      const gecko = missing.length ? await getTokenPrices(missing, signal).catch(() => new Map()) : new Map()
-      const rows: PumpHolding[] = mine.map((t) => {
-        const q = quotes.get(t.mint)
-        const g = gecko.get(t.mint)
-        const c = curves.get(t.mint)!
-        const curvePrice = !c.complete && Number.isFinite(solUsd) ? c.priceSol * solUsd : undefined
-        const price = q && Number.isFinite(q.priceUsd) ? q.priceUsd : (g?.priceUsd ?? curvePrice)
+      const all = await getHoldings(address!, signal)
+      const pons = await filterPonsTokens(all.map((h) => h.token))
+      const mine = all.filter((h) => pons.has(h.token.toLowerCase()))
+      const quotes = await getQuotes(
+        mine.map((h) => h.token),
+        signal,
+      )
+      // Curve tokens are not on DexScreener: price them from GeckoTerminal's Pons curve index.
+      const unpriced = mine.filter((h) => !Number.isFinite(quotes.get(h.token.toLowerCase())?.priceUsd ?? NaN)).map((h) => h.token)
+      const curvePrices = unpriced.length ? await getTokenPrices(unpriced, signal).catch(() => new Map()) : new Map()
+      const rows: PonsHolding[] = mine.map((h) => {
+        const key = h.token.toLowerCase()
+        const q = quotes.get(key)
+        const g = curvePrices.get(key)
+        const amount = Number(formatUnits(h.balance, h.decimals))
+        const price = q && Number.isFinite(q.priceUsd) ? q.priceUsd : g?.priceUsd
         return {
-          token: t.mint,
-          symbol: q?.symbol ?? g?.symbol ?? `${t.mint.slice(0, 4)}…`,
-          name: q?.name ?? g?.name ?? 'Pump.fun token',
-          icon: q?.image ?? g?.image,
-          amount: t.amount,
+          token: h.token,
+          symbol: h.symbol,
+          name: h.name,
+          icon: q?.image ?? g?.image ?? h.icon,
+          amount,
           priceUsd: price,
-          valueUsd: price != null ? t.amount * price : undefined,
+          valueUsd: price != null ? amount * price : undefined,
           change24h: q?.change24h,
           liquidityUsd: q?.liquidityUsd ?? g?.liquidityUsd,
           volume24h: q?.volume24h ?? g?.volume24h,
-          onCurve: !c.complete,
+          onCurve: pons.get(key)?.onCurve ?? false,
         }
       })
       rows.sort((a, b) => (b.valueUsd ?? -1) - (a.valueUsd ?? -1))
@@ -96,6 +80,11 @@ export function usePumpHoldings(address: string | undefined) {
   })
 }
 
-export function useActivity(address: string | undefined) {
-  return useQuery({ queryKey: ['activity', address], queryFn: () => getActivity(address!), enabled: !!address, refetchInterval: 30_000 })
+export function useActivity(address: Address | undefined) {
+  return useQuery({
+    queryKey: ['activity', address],
+    queryFn: ({ signal }) => getActivity(address!, signal),
+    enabled: !!address,
+    refetchInterval: 30_000,
+  })
 }

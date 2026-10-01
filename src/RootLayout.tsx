@@ -27,7 +27,7 @@ export function RootLayout() {
 /** Shown while the dashboard chunk downloads on first visit to /app. */
 export function AppLoading() {
   return (
-    <Flex minH="100vh" align="center" justify="center" bg="var(--ink)" aria-label="Loading FunPerps">
+    <Flex minH="100vh" align="center" justify="center" bg="var(--ink)" aria-label="Loading Ponsia Perps">
       <Mark size={80} animate />
     </Flex>
   )

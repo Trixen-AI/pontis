@@ -1,57 +1,44 @@
-import { PublicKey } from '@solana/web3.js'
+import type { Address } from 'viem'
+import { isAddress } from 'viem'
+import { robinhood as robinhoodChain } from 'viem/chains'
 
 // ---- environment ----
 const env = import.meta.env
 export const REOWN_PROJECT_ID: string | undefined = env.VITE_REOWN_PROJECT_ID?.trim() || undefined
-const rpcOverride: string | undefined = env.VITE_SOLANA_RPC_URL?.trim() || undefined
+const rpcOverride: string | undefined = env.VITE_ROBINHOOD_RPC_URL?.trim() || undefined
+const perpsRaw: string | undefined = env.VITE_PONSIA_PERPS_ADDRESS?.trim() || undefined
+/** Ponsia Perps engine. `undefined` until the contract is deployed and configured. */
+export const PERPS_ENGINE: Address | undefined = perpsRaw && isAddress(perpsRaw) ? perpsRaw : undefined
 
-// ---- chain: Solana mainnet ----
-export const SOLANA_MAINNET = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'
-/**
- * Browser-friendly RPC. Order: your own RPC (VITE_SOLANA_RPC_URL, e.g. Helius) > Reown's Solana RPC
- * (keyed by the project ID, CORS-enabled, supports token-account reads) > PublicNode (no wallet token reads).
- * The official api.mainnet-beta endpoint rejects browser requests, so it is never used here.
- */
-export const RPC_URL =
-  rpcOverride ??
-  (REOWN_PROJECT_ID ? `https://rpc.walletconnect.org/v1/?chainId=${SOLANA_MAINNET}&projectId=${REOWN_PROJECT_ID}` : 'https://solana-rpc.publicnode.com')
+// ---- chain ----
+export const RPC_URL = rpcOverride ?? robinhoodChain.rpcUrls.default.http[0]
+export const robinhood = rpcOverride
+  ? { ...robinhoodChain, rpcUrls: { default: { http: [rpcOverride] } } }
+  : robinhoodChain
+export const EXPLORER = robinhoodChain.blockExplorers.default.url
+export const explorerTx = (hash: string) => `${EXPLORER}/tx/${hash}`
+export const explorerAddress = (address: string) => `${EXPLORER}/address/${address}`
+export const explorerToken = (address: string) => `${EXPLORER}/token/${address}`
 
-export const EXPLORER = 'https://solscan.io'
-export const explorerTx = (sig: string) => `${EXPLORER}/tx/${sig}`
-export const explorerAddress = (address: string) => `${EXPLORER}/account/${address}`
-export const explorerToken = (mint: string) => `${EXPLORER}/token/${mint}`
+// ---- Pons launchpad (verified on Robinhood Chain) ----
+export const PONS = {
+  /** The PONS token itself (launched by the legacy V1 factory). */
+  token: '0x39dBED3a2bd333467115dE45665cC57F813C4571',
+  /** PonsV2LaunchFactory: emits TokenLaunched + PoolGraduated; getLaunchedToken(token). */
+  v2Factory: '0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e',
+  /** Legacy V1 factory: launched straight into Uniswap V3 pools. Launching is disabled. */
+  v1Factory: '0x0c37a24F5D23A486FA692d1500881d698B1F77a4',
+} as const satisfies Record<string, Address>
 
-export const WSOL = 'So11111111111111111111111111111111111111112'
-/** SPL Token and Token-2022: new Pump.fun mints use Token-2022. */
-export const TOKEN_PROGRAMS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'] as const
-
-// ---- Pump.fun (verified on mainnet) ----
-export const PUMP = {
-  /** Bonding-curve program. Every Pump.fun token has a PDA ["bonding-curve", mint] owned by it. */
-  program: new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'),
-  /** Tokens on a fresh curve: 793.1M are sold through the curve before it completes. */
-  initialRealTokenReserves: 793_100_000n * 1_000_000n,
-  tokenDecimals: 6,
+/** GeckoTerminal dex ids that carry Pons markets. */
+export const PONS_DEXES = {
+  curve: 'pons-v2', // bonding curve, pre-graduation
+  graduated: 'pons-v2-dex', // graduated V2 pools
+  legacy: 'pons-dot-family', // V1 launches
 } as const
-
-/** GeckoTerminal dex ids that carry Pump.fun markets. */
-export const PUMP_DEXES = {
-  curve: 'pump-fun', // bonding curve, pre-graduation
-  graduated: 'pumpswap', // PumpSwap AMM (open to any token, so markets are checked on-chain)
-} as const
-
-/** A base58 string that decodes to a 32-byte Solana public key (wallets, mints and PDAs all qualify). */
-export function isSolanaAddress(s: string): boolean {
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s)) return false
-  try {
-    return new PublicKey(s).toBytes().length === 32
-  } catch {
-    return false
-  }
-}
 
 // ---- protocol parameters ----
-// Used for sizing previews. Margin is posted in SOL.
+// Used for sizing previews. When the perps engine is configured, on-chain values replace these.
 export const PROTOCOL = {
   maxLeverage: 10,
   maintenanceMarginBps: 500, // 5%

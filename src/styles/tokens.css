@@ -1,40 +1,31 @@
-/* FunPerps design tokens. Palette follows zats.market: near-black ink, white / light-grey paper,
-   orange as the call to action, mint and light blue as the pastel accents. */
+/* Ponsia Perps design tokens: the hyperfoundation.org palette (deep teal, mint, pale mint papers). */
 :root {
   /* dark surfaces */
-  --ink: #0a0a0b;          /* page ink, loader, footer */
-  --ink-2: #111112;        /* panels, stack + stats band */
-  --ink-3: #232323;        /* raised controls, hovers */
-  --line: #323232;         /* hairlines, dividers, box borders */
+  --ink: #072723;          /* page ink, loader, footer */
+  --ink-2: #0a2c28;        /* stack + stats band */
+  --line: #23524c;         /* hairlines, stat dividers, box border */
 
-  /* brand accent */
-  --accent: #f98500;       /* primary buttons, labels, active states */
-  --accent-ink: #0a0a0b;   /* text on accent */
-
-  /* the two sides of a trade */
-  --long: #71cfa3;         /* long, price up, runners */
-  --long-ink: #0a0a0b;     /* text on long */
-  --short: #f98500;        /* short, price down, rugs */
-  --short-ink: #0a0a0b;    /* text on short */
-  --rug: var(--short);     /* legacy alias */
+  /* accent */
+  --accent: #97fce4;       /* primary buttons, labels, active callouts */
+  --accent-ink: #193833;   /* text on accent */
+  --rug: #ec6853;          /* the short side: rug candles, short highlights */
 
   /* light surfaces */
-  --paper: #ffffff;        /* pledge section */
-  --paper-2: #f3f3f3;      /* statement section */
-  --paper-3: #bcefff;      /* wordmark band (zats light blue) */
-  --contour: #999999;      /* contour lines and rules on paper */
+  --paper: #f5fefd;        /* pledge section */
+  --paper-2: #edfffc;      /* statement section */
+  --paper-3: #dbfbf6;      /* wordmark section */
+  --contour: #5a9688;      /* contour lines on paper */
 
-  /* chart marks on the ink surface: in-band steps of --long / --short, validated with the dataviz checks */
-  --chart-up: #3f9d73;
-  --chart-down: #c76a00;
-  --chart-grid: rgba(255, 255, 255, 0.05);
+  /* chart marks on the ink surface: validated with the dataviz checks (dark band on #072723, deutan dE 10.7) */
+  --chart-up: #22a58c;
+  --chart-down: #cf5139;
+  --chart-grid: rgba(255, 255, 255, 0.045);
 
   /* text */
   --white: #ffffff;
   --white-92: rgba(255, 255, 255, 0.92);
-  --white-80: rgba(255, 255, 255, 0.78);
-  --muted: #999999;        /* dimmed words, idle callouts, secondary text */
-  --muted-2: #6b6b6b;
+  --white-80: rgba(255, 255, 255, 0.8);
+  --muted: #b0c5c1;        /* dimmed statement words, idle callouts */
 
   /* type */
   --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, Ubuntu, 'Helvetica Neue', sans-serif;

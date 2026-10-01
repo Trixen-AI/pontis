@@ -5,22 +5,19 @@ const r = ([x, y, width, height]: Rect) => ({ x, y, width, height })
 
 type MarkProps = {
   size: number
-  /** duo = mint long eye + orange short eye + white grin (dark surfaces); mono = one colour (light surfaces, nav) */
+  /** duo = mint long + coral short (dark surfaces); mono = one colour (light surfaces, nav) */
   tone?: 'duo' | 'mono'
   color?: string
-  /** Grin colour in duo tone. */
-  faceColor?: string
-  /** Loop the "diverge and lock" motion: the long eye lifts, the short eye sinks, both snap back. */
+  /** Loop the "diverge and lock" motion: long lifts, short sinks, both snap back into the P. */
   animate?: boolean
   className?: string
   title?: string
 }
 
-/** The FunPerps mark: a grin whose eyes are a long candle and a short candle. */
-export function Mark({ size, tone = 'duo', color = 'currentColor', faceColor = 'var(--white)', animate = false, className, title }: MarkProps) {
-  const long = tone === 'duo' ? 'var(--long)' : color
-  const short = tone === 'duo' ? 'var(--short)' : color
-  const face = tone === 'duo' ? faceColor : color
+/** The Ponsia Perps mark: a long candle and a short candle locked into a "P". */
+export function Mark({ size, tone = 'duo', color = 'currentColor', animate = false, className, title }: MarkProps) {
+  const long = tone === 'duo' ? 'var(--accent)' : color
+  const short = tone === 'duo' ? 'var(--rug)' : color
   const cls = ['pmark', animate ? 'pmark--live' : '', className ?? ''].filter(Boolean).join(' ')
   return (
     <svg
@@ -39,14 +36,13 @@ export function Mark({ size, tone = 'duo', color = 'currentColor', faceColor = '
       </g>
       <g className="pmark-short">
         <rect className="pmark-short-wick" {...r(MARK.short.wick)} rx={MARK.wickR} fill={short} />
-        <rect {...r(MARK.short.body)} rx={MARK.bodyR} fill={short} />
+        <path d={MARK.short.bodyPath} fill={short} />
       </g>
-      <path d={MARK.smile.d} fill="none" stroke={face} strokeWidth={MARK.smile.width} strokeLinecap="round" />
     </svg>
   )
 }
 
-/** Wordmark "Fun" + italic "Perps", outlined. `height` sets the glyph box height. */
+/** Wordmark "Ponsia" + italic "Perps", outlined. `height` sets the glyph box height. */
 export function Wordmark({ height, color = 'currentColor', className }: { height: number; color?: string; className?: string }) {
   const [x, y, w, h] = WORDMARK.box
   return (
@@ -57,7 +53,7 @@ export function Wordmark({ height, color = 'currentColor', className }: { height
 }
 
 /** Header lockup: mono mark + wordmark in one SVG. */
-export function Lockup({ height, color = 'currentColor', title = 'FunPerps' }: { height: number; color?: string; title?: string }) {
+export function Lockup({ height, color = 'currentColor', title = 'Ponsia Perps' }: { height: number; color?: string; title?: string }) {
   const { width, height: H, top, markScale, markX, markY, textX } = LOCKUP
   return (
     <svg height={height} width={(height * width) / H} viewBox={`0 ${top} ${width} ${H}`} role="img" aria-label={title}>
@@ -65,8 +61,7 @@ export function Lockup({ height, color = 'currentColor', title = 'FunPerps' }: {
         <rect {...r(MARK.long.wick)} rx={MARK.wickR} />
         <rect {...r(MARK.long.body)} rx={MARK.bodyR} />
         <rect {...r(MARK.short.wick)} rx={MARK.wickR} />
-        <rect {...r(MARK.short.body)} rx={MARK.bodyR} />
-        <path d={MARK.smile.d} fill="none" stroke={color} strokeWidth={MARK.smile.width} strokeLinecap="round" />
+        <path d={MARK.short.bodyPath} />
       </g>
       <path transform={`translate(${textX} 0)`} d={WORDMARK.d} fill={color} />
     </svg>

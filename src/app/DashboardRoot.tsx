@@ -3,13 +3,14 @@ import { Box } from '@chakra-ui/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
+import { WagmiProvider } from 'wagmi'
 import { AppShell } from './components/AppShell'
 import { EmptyState, PillSolid, Skeleton } from './components/ui'
 import Listings from './pages/Listings'
 import Markets from './pages/Markets'
 import Portfolio from './pages/Portfolio'
 import Positions from './pages/Positions'
-import './web3/appkit' // creates the Reown AppKit modal once
+import { wagmiConfig } from './web3/wagmi'
 
 // The market page carries the chart library; split it out.
 const Market = lazy(() => import('./pages/Market'))
@@ -30,14 +31,15 @@ function PageFallback() {
 function NotFound() {
   return (
     <EmptyState title="Nothing lives here" action={<PillSolid to="/app/markets">Go to markets</PillSolid>}>
-      That page is not part of the FunPerps app.
+      That page is not part of the Ponsia Perps app.
     </EmptyState>
   )
 }
 
 export default function DashboardRoot() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="markets" replace />} />
@@ -56,6 +58,7 @@ export default function DashboardRoot() {
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
-    </QueryClientProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   )
 }

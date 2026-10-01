@@ -1,7 +1,10 @@
-import { Box, Flex, chakra } from '@chakra-ui/react'
+import { Box, Flex, Text, chakra } from '@chakra-ui/react'
 import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet } from 'react-router'
+import { useSwitchChain } from 'wagmi'
 import { Lockup } from '@/components/ui/Brand'
+import { robinhood } from '@/app/config'
+import { useWalletState } from '@/app/hooks/useWallet'
 import { ConnectButton } from './ConnectButton'
 
 // Small line icons for the mobile dock (24 grid, 1.8 stroke, currentColor).
@@ -54,7 +57,7 @@ const NAV = [
 /** Same white pill as the website nav. Sections live here on desktop, in the dock on phones. */
 function AppNav() {
   return (
-    <Box as="header" position="sticky" top="0" zIndex={20} pt={{ base: '12px', md: '20px' }} pb="12px" px={{ base: '16px', md: '24px' }} bg="linear-gradient(var(--ink) 70%, rgba(14,21,16,0))">
+    <Box as="header" position="sticky" top="0" zIndex={20} pt={{ base: '12px', md: '20px' }} pb="12px" px={{ base: '16px', md: '24px' }} bg="linear-gradient(var(--ink) 70%, rgba(7,39,35,0))">
       <Flex
         as="nav"
         aria-label="App"
@@ -74,7 +77,7 @@ function AppNav() {
           display="flex"
           alignItems="center"
           color="var(--ink)"
-          aria-label="FunPerps home"
+          aria-label="Ponsia Perps home"
           flexShrink={0}
           sx={{ '& svg': { height: { base: '24px', md: '28px' }, width: 'auto' } }}
         >
@@ -105,7 +108,7 @@ function AppNav() {
   )
 }
 
-/** Phone tab bar: a floating white pill at the bottom, four equal tabs, the active one in orange. */
+/** Phone tab bar: a floating white pill at the bottom, four equal tabs, the active one in mint. */
 function MobileDock() {
   return (
     <Box
@@ -160,12 +163,29 @@ function MobileDock() {
   )
 }
 
+function WrongNetworkBanner() {
+  const { wrongNetwork } = useWalletState()
+  const { switchChain, isPending } = useSwitchChain()
+  if (!wrongNetwork) return null
+  return (
+    <Flex maxW="var(--container)" mx="auto" mb="20px" align="center" justify="space-between" gap="12px" wrap="wrap" px="16px" py="12px" borderRadius="12px" border="0.8px solid rgba(236,104,83,0.55)" bg="rgba(236,104,83,0.06)">
+      <Text m="0" fontSize="14px" color="var(--white-92)">
+        Your wallet is on another network. Ponsia Perps runs on Robinhood Chain.
+      </Text>
+      <chakra.button type="button" onClick={() => switchChain({ chainId: robinhood.id })} disabled={isPending} h="36px" px="18px" borderRadius="60px" border="none" bg="var(--rug)" color="var(--white)" cursor="pointer" fontSize="14px">
+        {isPending ? 'Switching…' : 'Switch to Robinhood Chain'}
+      </chakra.button>
+    </Flex>
+  )
+}
+
 export function AppShell() {
   return (
     <Box minH="100vh" bg="var(--ink)">
       <AppNav />
       {/* phones: leave room so the dock never covers the last row or the order button */}
       <Box as="main" px={{ base: '16px', md: '24px' }} pt={{ base: '8px', md: '28px' }} pb={{ base: 'calc(104px + env(safe-area-inset-bottom))', md: '80px' }}>
+        <WrongNetworkBanner />
         <Box maxW="var(--container)" mx="auto">
           <Outlet />
         </Box>

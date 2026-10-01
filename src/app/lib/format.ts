@@ -30,10 +30,10 @@ export function formatPct(v: number | undefined | null): string {
   return `${v > 0 ? '+' : ''}${s}%`
 }
 
-export function formatSol(v: number | undefined | null, digits = 4): string {
+export function formatEth(v: number | undefined | null, digits = 4): string {
   if (v == null || !Number.isFinite(v)) return '–'
-  if (v !== 0 && Math.abs(v) < 10 ** -digits) return `<${(10 ** -digits).toFixed(digits)} SOL`
-  return `${v.toLocaleString('en-US', { maximumFractionDigits: digits })} SOL`
+  if (v !== 0 && Math.abs(v) < 10 ** -digits) return `<${(10 ** -digits).toFixed(digits)} ETH`
+  return `${v.toLocaleString('en-US', { maximumFractionDigits: digits })} ETH`
 }
 
 export const shortAddress = (a: string | undefined) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '–')
@@ -49,6 +49,6 @@ export function timeAgo(ms: number | undefined, now = Date.now()): string {
   return `${Math.round(h / 24)}d ago`
 }
 
-/** Sign → side colour (up = long, down = short). */
+/** Sign → token color role (long up, short down). */
 export const changeColor = (v: number | undefined | null) =>
-  v == null || !Number.isFinite(v) || v === 0 ? 'var(--muted)' : v > 0 ? 'var(--long)' : 'var(--short)'
+  v == null || !Number.isFinite(v) || v === 0 ? 'var(--muted)' : v > 0 ? 'var(--accent)' : 'var(--rug)'

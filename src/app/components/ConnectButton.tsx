@@ -1,7 +1,7 @@
 import { Popover, PopoverArrow, PopoverBody, PopoverContent, PopoverTrigger, Text, chakra } from '@chakra-ui/react'
-import { useSolBalance, useWalletState } from '@/app/hooks/useWallet'
-import { formatSol, shortAddress } from '@/app/lib/format'
-import { openWallet, walletReady } from '@/app/web3/appkit'
+import { useEthBalance, useWalletState } from '@/app/hooks/useWallet'
+import { formatEth, shortAddress } from '@/app/lib/format'
+import { openWallet, walletReady } from '@/app/web3/wagmi'
 
 const pill = {
   display: 'inline-flex',
@@ -25,8 +25,8 @@ export function ConnectButton() {
 }
 
 function AppKitConnect() {
-  const { address, isConnected, connecting } = useWalletState()
-  const { sol } = useSolBalance(address)
+  const { address, isConnected, connecting, wrongNetwork } = useWalletState()
+  const { eth } = useEthBalance(address)
 
   if (!isConnected || !address)
     return (
@@ -35,11 +35,20 @@ function AppKitConnect() {
       </chakra.button>
     )
   return (
-    <chakra.button type="button" onClick={() => openWallet('Account')} bg="var(--ink)" color="var(--white)" aria-label={`Wallet ${address}`} {...pill}>
-      <chakra.span className="tabular" color="var(--accent)" display={{ base: 'none', sm: 'inline' }}>
-        {formatSol(sol, 3)}
-      </chakra.span>
-      <span>{shortAddress(address)}</span>
+    <chakra.button
+      type="button"
+      onClick={() => openWallet(wrongNetwork ? 'Networks' : 'Account')}
+      bg={wrongNetwork ? 'var(--rug)' : 'var(--ink)'}
+      color="var(--white)"
+      aria-label={`Wallet ${address}`}
+      {...pill}
+    >
+      {!wrongNetwork && (
+        <chakra.span className="tabular" color="var(--accent)" display={{ base: 'none', sm: 'inline' }}>
+          {formatEth(eth, 3)}
+        </chakra.span>
+      )}
+      <span>{wrongNetwork ? 'Wrong network' : shortAddress(address)}</span>
     </chakra.button>
   )
 }

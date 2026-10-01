@@ -15,12 +15,12 @@ import { formatPrice, formatUsd } from '@/app/lib/format'
 import { useCandles } from '@/app/hooks/useMarketData'
 import { Skeleton } from './ui'
 
-// Chart-only steps of the long (mint) / short (orange) hues, validated with the dataviz checks on #0A0A0B.
-const UP = '#3f9d73'
-const DOWN = '#c76a00'
-const INK_MUTED = '#999999'
-const LINE = '#323232'
-const GRID = 'rgba(255,255,255,0.05)'
+// Chart-only steps of the long/short hues (see tokens.css): validated for the dark surface.
+const UP = '#22a58c'
+const DOWN = '#cf5139'
+const INK_MUTED = '#b0c5c1'
+const LINE = '#23524c'
+const GRID = 'rgba(255,255,255,0.045)'
 
 type Readout = Pick<Candle, 'open' | 'high' | 'low' | 'close' | 'volume'> & { time: number }
 
@@ -56,8 +56,8 @@ export function PriceChart({ pool, symbol }: { pool: string | undefined; symbol:
       timeScale: { borderColor: LINE, timeVisible: true, secondsVisible: false },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: 'rgba(249,133,0,0.4)', labelBackgroundColor: '#232323' },
-        horzLine: { color: 'rgba(249,133,0,0.4)', labelBackgroundColor: '#232323' },
+        vertLine: { color: 'rgba(151,252,228,0.35)', labelBackgroundColor: '#193833' },
+        horzLine: { color: 'rgba(151,252,228,0.35)', labelBackgroundColor: '#193833' },
       },
     })
     const cs = c.addSeries(CandlestickSeries, {
@@ -90,7 +90,7 @@ export function PriceChart({ pool, symbol }: { pool: string | undefined; symbol:
     if (!data || !candles.current || !volume.current) return
     candles.current.setData(data.map((d) => ({ time: d.time as UTCTimestamp, open: d.open, high: d.high, low: d.low, close: d.close })))
     volume.current.setData(
-      data.map((d) => ({ time: d.time as UTCTimestamp, value: d.volume, color: d.close >= d.open ? 'rgba(63,157,115,0.55)' : 'rgba(199,106,0,0.6)' })),
+      data.map((d) => ({ time: d.time as UTCTimestamp, value: d.volume, color: d.close >= d.open ? 'rgba(34,165,140,0.55)' : 'rgba(207,81,57,0.6)' })),
     )
     chart.current?.timeScale().fitContent()
   }, [data])

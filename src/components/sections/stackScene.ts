@@ -1,5 +1,5 @@
-// Geometry for the isometric "inside FunPerps" scene, in a 1320 x 615 artboard.
-// Candles stand on two engine plates, which sit on the Solana base.
+// Geometry for the isometric "inside Ponsia Perps" scene, in a 1320 x 615 artboard.
+// Candles stand on two engine plates, which sit on the Robinhood Chain base.
 
 export const ART_W = 1320
 export const ART_H = 615

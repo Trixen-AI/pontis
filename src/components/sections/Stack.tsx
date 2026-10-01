@@ -13,10 +13,10 @@ const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 const T = `opacity 0.6s ${EASE}, transform 0.6s ${EASE}, fill 0.4s ease, stroke 0.4s ease, color 0.4s ease`
 
 const FACES = {
-  long: { top: '#b4ead0', left: '#71cfa3', right: '#4fa982', ink: '#0a0a0b' },
-  short: { top: '#ffc27a', left: '#f98500', right: '#c76a00', ink: '#0a0a0b' },
-  plate: { top: '#232323', left: '#1b1b1c', right: '#151516', ink: '#999999' },
-  base: { top: '#1a1a1b', left: '#141415', right: '#0f0f10', ink: '#999999' },
+  long: { top: '#d4fff4', left: '#97fce4', right: '#6cd0b8', ink: '#193833' },
+  short: { top: '#f7b8ab', left: '#ec6853', right: '#c24e3b', ink: '#2a0f0a' },
+  plate: { top: '#16413a', left: '#113530', right: '#0d2c28', ink: '#8fc4b8' },
+  base: { top: '#113630', left: '#0d2d29', right: '#0a2622', ink: '#8fc4b8' },
 }
 
 type Layer = 'sides' | 'markets' | 'engines' | 'chain'
@@ -38,7 +38,7 @@ function IsoSlab({ b, palette, label, on, labelOn }: { b: IsoBox; palette: typeo
     <g style={{ opacity: on ? 1 : 0.3, transition: T }}>
       <polygon points={f.left} fill={palette.left} />
       <polygon points={f.right} fill={palette.right} />
-      <polygon points={f.top} fill={palette.top} stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+      <polygon points={f.top} fill={palette.top} stroke="rgba(151,252,228,0.08)" strokeWidth={1} />
       {label && (
         <text
           transform={alongFaceText(b)}
@@ -60,7 +60,7 @@ function Scene({ step, leaders = true }: { step: number; leaders?: boolean }) {
   const sorted = [...CANDLES].sort((a, b) => a.x + a.y - (b.x + b.y))
   return (
     <svg viewBox={`0 0 ${ART_W} ${ART_H}`} width={ART_W} height={ART_H} aria-hidden="true" style={{ overflow: 'visible' }}>
-      <IsoSlab b={BASE_SHADOW} palette={{ ...FACES.base, top: '#121213', left: '#0e0e0f', right: '#0b0b0c' }} on={all || focus === 'chain'} />
+      <IsoSlab b={BASE_SHADOW} palette={{ ...FACES.base, top: '#0b2b27', left: '#092521', right: '#071f1c' }} on={all || focus === 'chain'} />
       <IsoSlab b={BASE} palette={FACES.base} label={stack.plates.base} on={all || focus === 'chain'} labelOn={focus === 'chain'} />
       <IsoSlab b={PLATE_L} palette={FACES.plate} label={stack.plates.left} on={all || focus === 'engines'} labelOn={focus === 'engines'} />
       <IsoSlab b={PLATE_R} palette={FACES.plate} label={stack.plates.right} on={all || focus === 'engines'} labelOn={focus === 'engines'} />
@@ -160,7 +160,7 @@ export function Stack() {
   const activeText = step < STEPS ? stack.steps[step].text : null
 
   return (
-    <Box as="section" id="markets" ref={ref} position="relative" h={`${(STEPS + 1) * 100}vh`} bg="var(--ink-2)" aria-label="Inside FunPerps">
+    <Box as="section" id="markets" ref={ref} position="relative" h={`${(STEPS + 1) * 100}vh`} bg="var(--ink-2)" aria-label="Inside Ponsia Perps">
       <Box position="sticky" top="0" h="100vh" overflow="hidden">
         <Flex direction="column" align="center" maxW="var(--container)" mx="auto" h="100%" pt={compact ? '0' : '142px'}
           justify={compact ? 'center' : 'flex-start'}>
@@ -168,7 +168,7 @@ export function Stack() {
             <span>{stack.titleBefore}</span>
             <Box as="span" display="flex" alignItems="flex-end" color="var(--white)">
               <Wordmark height={small ? 32 : 51} />
-              <span className="sr-only">FunPerps</span>
+              <span className="sr-only">Ponsia Perps</span>
             </Box>
             {stack.titleAfter ? <span>{stack.titleAfter}</span> : null}
           </Flex>

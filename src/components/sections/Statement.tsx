@@ -23,7 +23,7 @@ function Wicks() {
 
 export function Statement() {
   return (
-    <Box as="section" position="relative" bg="var(--paper-2)" borderTop="1px solid rgba(14,21,16,0.08)" py={{ base: '100px', md: '160px' }} px="16px" overflow="hidden">
+    <Box as="section" position="relative" bg="var(--paper-2)" borderTop="1px solid rgba(7,39,35,0.08)" py={{ base: '100px', md: '160px' }} px="16px" overflow="hidden">
       <Wicks />
       <Flex position="relative" direction="column" align="center" textAlign="center">
         <Text
